@@ -1,0 +1,28 @@
+{
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "simplechat-4880e",
+          "appId": "1:29978125325:android:cc4748dd5f74745a22e144",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "simplechat-4880e",
+          "configurations": {
+            "android": "1:29978125325:android:cc4748dd5f74745a22e144",
+            "web": "1:29978125325:web:6ced85eea48ac83d22e144",
+            "windows": "1:29978125325:web:fb49dc4bd09a110622e144"
+          }
+        }
+      }
+    }
+  },
+  "functions": [
+    {
+      "source": "functions"
+    }
+  ]
+}
