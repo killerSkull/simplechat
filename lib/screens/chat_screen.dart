@@ -1,11 +1,11 @@
 import 'dart:async';
 import 'dart:io';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:simplechat/screens/call_screen.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_sound/flutter_sound.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:simplechat/models/uploading_message_model.dart';
@@ -16,7 +16,6 @@ import 'package:simplechat/screens/chat/logic/chat_state_manager.dart';
 import 'package:simplechat/screens/chat/widgets/chat_app_bar.dart';
 import 'package:simplechat/screens/chat/widgets/message_input_bar.dart';
 import 'package:simplechat/screens/chat/widgets/message_list.dart';
-import 'package:simplechat/services/agora_service.dart';
 import 'package:simplechat/services/firestore_service.dart';
 import 'package:simplechat/services/storage_service.dart';
 import 'package:uuid/uuid.dart';
@@ -36,7 +35,6 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   late final ChatStateManager _chatManager;
   late final FirestoreService _firestoreService;
   late final StorageService _storageService;
-  late final AgoraService _agoraService;
   final _messageController = TextEditingController();
   Query? _messagesQuery;
   bool _isEmojiPickerVisible = false;
@@ -55,20 +53,17 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
-    _agoraService = AgoraService();
     _firestoreService = context.read<FirestoreService>();
     _storageService = context.read<StorageService>();
     final currentUser = _firestoreService.auth.currentUser!;
-    final chatId =
-        _firestoreService.getChatId(currentUser.uid, widget.otherUser.uid);
 
-    _messagesQuery = _firestoreService.getMessagesQuery(chatId);
+    _messagesQuery = _firestoreService.getMessagesQuery(widget.chatId);
 
     _chatManager = ChatStateManager(
       context: context,
       firestoreService: _firestoreService,
       storageService: _storageService,
-      chatId: chatId,
+      chatId: widget.chatId,
       currentUserId: currentUser.uid,
       otherUserId: widget.otherUser.uid,
     );
@@ -76,12 +71,12 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     _chatManager.addListener(() => setState(() {}));
 
     WidgetsBinding.instance.addObserver(this);
-    _firestoreService.updateUserActiveChat(chatId);
+    _firestoreService.updateUserActiveChat(widget.chatId);
 
-    _listenForChatUpdates(chatId, currentUser.uid);
+    _listenForChatUpdates(widget.chatId, currentUser.uid);
     _checkIfContact();
     _firestoreService.markMessagesAsRead(
-        chatId: chatId, currentUserId: currentUser.uid);
+        chatId: widget.chatId, currentUserId: currentUser.uid);
     _searchController.addListener(() => setState(() {}));
 
     _recorder.openRecorder().then((value) {
@@ -132,10 +127,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
             final clearedAtField = 'cleared_at_for_$currentUserId';
             newClearedAtTimestamp = chatData[clearedAtField] as Timestamp?;
         }
-
-        // --- SOLUCIÓN DEFINITIVA ---
-        // Solo reconstruimos la lista de mensajes si la marca de tiempo de "vaciar chat" ha cambiado.
-        // Esto ignora los cambios de "escribiendo..." y evita el parpadeo.
+        
         if (newClearedAtTimestamp != _currentClearedAtTimestamp) {
           Query newQuery = _firestoreService.getMessagesQuery(chatId);
           if (newClearedAtTimestamp != null) {
@@ -286,39 +278,51 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         break;
     }
   }
-  // --- NUEVA FUNCIÓN PARA INICIAR LLAMADAS ---
+  
+  /// --- LÓGICA DE LLAMADA ACTUALIZADA ---
   Future<void> _startCall(bool isVideoCall) async {
     // 1. Pedir permisos
-    await [Permission.camera, Permission.microphone].request();
+    final cameraStatus = await Permission.camera.request();
+    final micStatus = await Permission.microphone.request();
 
-    // 2. Usar el chatId de la conversación como nombre del canal
-    final channelName = widget.chatId;
-    
-    // 3. Obtener el token para ese canal
-    final token = await AgoraService.fetchToken(channelName);
+    if (cameraStatus.isGranted && micStatus.isGranted) {
+      final channelName = widget.chatId;
 
-    if (token == null) {
+      // 2. Iniciar la llamada en Firestore. Esto creará el documento y
+      //    activará la función en la nube para enviar la notificación.
+      await _firestoreService.startCall(
+        chatId: channelName,
+        recipientId: widget.otherUser.uid,
+        isVideoCall: isVideoCall,
+      );
+
+      // 3. Escuchar el documento de la llamada para obtener el token.
+      final callStream = _firestoreService.getCallStream(channelName);
+      final callDoc = await callStream.firstWhere((doc) =>
+          doc.exists && (doc.data() as Map<String, dynamic>).containsKey('token'));
+      
+      final callData = callDoc.data() as Map<String, dynamic>;
+      
+      // 4. Navegar a la pantalla de llamada con los datos correctos.
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Error al iniciar la llamada.')),
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => CallScreen(
+              channelName: channelName,
+              token: callData['token'],
+              otherUserName: widget.nickname ?? widget.otherUser.displayName ?? 'Usuario',
+              isVideoCall: isVideoCall,
+            ),
+          ),
         );
       }
-      return;
-    }
-
-    // 5. Navegar a la pantalla de llamada
-    if (mounted) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => CallScreen(
-            channelName: channelName,
-            token: token,
-            otherUserName: widget.nickname ?? widget.otherUser.displayName ?? 'Usuario',
-            isVideoCall: isVideoCall,
-          ),
-        ),
-      );
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Se necesitan permisos de cámara y micrófono.')),
+        );
+      }
     }
   }
 

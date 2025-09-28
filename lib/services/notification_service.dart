@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:simplechat/models/user_model.dart';
 import 'package:simplechat/screens/chat_screen.dart';
+import 'package:simplechat/screens/incaming_call_screen.dart';
 import 'package:simplechat/services/app_state.dart';
 import 'package:simplechat/services/firestore_service.dart';
 
@@ -34,17 +35,23 @@ class NotificationService {
     await _initLocalNotifications();
     await _setupInteractedMessage();
 
+    // --- MODIFICADO: Ahora el listener distingue entre tipos de mensaje ---
     FirebaseMessaging.onMessage.listen((RemoteMessage message) {
       print("Mensaje recibido en primer plano!");
-      final chatId = message.data['chatId'];
-      
-      if (AppState().activeChatId == chatId) {
-        print("El usuario ya está en el chat. No se mostrará notificación local.");
-        return;
-      }
+      final type = message.data['type'];
 
-      if (message.notification != null) {
-        showLocalNotification(message);
+      if (type == 'incoming_call') {
+        // Si es una llamada y la app está abierta, navegamos directamente
+        _handleIncomingCall(message.data);
+      } else {
+        // Si es un mensaje de chat, usamos la lógica anterior
+        final chatId = message.data['chatId'];
+        if (AppState().activeChatId == chatId) {
+          return;
+        }
+        if (message.notification != null) {
+          showLocalNotification(message);
+        }
       }
     });
   }
@@ -74,7 +81,7 @@ class NotificationService {
     await _localNotifications.initialize(
       initializationSettings,
       onDidReceiveNotificationResponse: (details) {
-        // La lógica se maneja centralmente en _handleMessage
+        // Esta lógica ahora se centraliza en _setupInteractedMessage
       },
     );
 
@@ -117,8 +124,31 @@ class NotificationService {
     FirebaseMessaging.onMessageOpenedApp.listen(_handleMessage);
   }
 
-  void _handleMessage(RemoteMessage message) async {
-    final data = message.data;
+  /// --- MODIFICADO: Este método ahora actúa como un 'router' ---
+  /// Decide qué hacer basado en el tipo de notificación.
+  void _handleMessage(RemoteMessage message) {
+    final type = message.data['type'];
+    if (type == 'incoming_call') {
+      _handleIncomingCall(message.data);
+    } else {
+      _handleChatMessage(message.data);
+    }
+  }
+
+  /// --- NUEVO: Lógica específica para manejar una llamada entrante ---
+  void _handleIncomingCall(Map<String, dynamic> data) {
+    // Usamos el navigatorKey global para mostrar la pantalla de llamada
+    // sin importar en qué parte de la app esté el usuario.
+    navigatorKey.currentState?.push(
+      MaterialPageRoute(
+        builder: (context) => IncomingCallScreen(callData: data),
+        fullscreenDialog: true, // Para que aparezca como una superposición
+      ),
+    );
+  }
+
+  /// --- NUEVO: Lógica extraída para manejar solo notificaciones de chat ---
+  void _handleChatMessage(Map<String, dynamic> data) async {
     final senderId = data['senderId'];
     final currentUserId = FirestoreService().auth.currentUser?.uid;
     
@@ -129,18 +159,27 @@ class NotificationService {
         
         final contactDoc = await FirebaseFirestore.instance.collection('users').doc(currentUserId).collection('contacts').doc(senderId).get();
         
-        // --- CORRECCIÓN FINAL AQUÍ ---
-        // Se reescribe la lógica de forma explícita para evitar el error del analizador.
-        final String? nickname;
+        // --- CORRECCIÓN APLICADA ---
+        // Se reescribe la lógica de forma explícita para mayor claridad.
+        String? nickname;
         if (contactDoc.exists) {
-          nickname = contactDoc.data()?['nickname'];
-        } else {
-          nickname = null;
+          // Si el documento de contacto existe, intentamos obtener el apodo.
+          final contactData = contactDoc.data();
+          if (contactData != null && contactData.containsKey('nickname')) {
+            nickname = contactData['nickname'] as String?;
+          }
         }
+        
+        // Obtenemos el ID del chat para navegar correctamente
+        final chatId = FirestoreService().getChatId(currentUserId, senderId);
 
         navigatorKey.currentState?.push(
           MaterialPageRoute(
-            builder: (context) => ChatScreen(otherUser: userModel, nickname: nickname, chatId: 'chatId',),
+            builder: (context) => ChatScreen(
+              otherUser: userModel,
+              nickname: nickname,
+              chatId: chatId,
+            ),
           ),
         );
       }

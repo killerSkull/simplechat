@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:agora_rtc_engine/agora_rtc_engine.dart';
 import 'package:flutter/material.dart';
 import 'package:simplechat/services/agora_service.dart';
+import 'package:simplechat/services/firestore_service.dart';
 
 class CallScreen extends StatefulWidget {
   final String channelName;
@@ -23,6 +24,9 @@ class CallScreen extends StatefulWidget {
 
 class _CallScreenState extends State<CallScreen> {
   late final RtcEngine _engine;
+  late final FirestoreService _firestoreService;
+  StreamSubscription? _callStreamSubscription;
+
   int? _remoteUid;
   bool _localUserJoined = false;
   bool _isMuted = false;
@@ -31,35 +35,54 @@ class _CallScreenState extends State<CallScreen> {
   @override
   void initState() {
     super.initState();
+    _firestoreService = FirestoreService();
     _initializeAgora();
+    _listenToCallChanges();
   }
 
   @override
   void dispose() {
+    _firestoreService.endCall(widget.channelName, _firestoreService.auth.currentUser!.uid);
+    _callStreamSubscription?.cancel();
     _engine.leaveChannel();
     _engine.release();
     super.dispose();
   }
 
+  void _listenToCallChanges() {
+    _callStreamSubscription = _firestoreService.getCallStream(widget.channelName).listen((doc) {
+      if (doc.exists) {
+        final data = doc.data() as Map<String, dynamic>;
+        final status = data['status'];
+        if (status != 'ongoing' && status != 'ringing') {
+          if (mounted) Navigator.of(context).pop();
+        }
+      } else {
+         if (mounted) Navigator.of(context).pop();
+      }
+    });
+  }
+
   Future<void> _initializeAgora() async {
     try {
-      print("--- Iniciando Agora ---");
       _engine = createAgoraRtcEngine();
       await _engine.initialize(RtcEngineContext(appId: AgoraService.appId));
-      print("Motor de Agora inicializado.");
+
+      // --- CORRECCIÓN DEFINITIVA ---
+      // Se establece el perfil del canal a "Comunicación". Esto le dice a Agora
+      // que optimice para una llamada 1 a 1 de baja latencia. Es crucial
+      // hacerlo después de inicializar y antes de unirse.
+      await _engine.setChannelProfile(ChannelProfileType.channelProfileCommunication);
 
       _engine.registerEventHandler(
         RtcEngineEventHandler(
           onJoinChannelSuccess: (connection, elapsed) {
-            print("Unido al canal con éxito: ${connection.channelId}");
             setState(() => _localUserJoined = true);
           },
           onUserJoined: (connection, remoteUid, elapsed) {
-            print("Usuario remoto unido: $remoteUid");
             setState(() => _remoteUid = remoteUid);
           },
           onUserOffline: (connection, remoteUid, reason) {
-            print("Usuario remoto desconectado: $remoteUid");
             setState(() => _remoteUid = null);
             if (mounted) Navigator.of(context).pop();
           },
@@ -68,24 +91,18 @@ class _CallScreenState extends State<CallScreen> {
           },
         ),
       );
-      print("Manejadores de eventos registrados.");
 
       if (widget.isVideoCall) {
         await _engine.enableVideo();
         await _engine.startPreview();
-        print("Video local activado y previsualización iniciada.");
       } else {
+        await _engine.disableVideo();
         await _engine.enableAudio();
         setState(() => _isVideoDisabled = true);
-        print("Solo audio activado.");
       }
 
-      // --- CORRECCIÓN: Pequeña espera para evitar 'race condition' ---
-      // Damos 200 milisegundos a la UI para que termine de construirse
-      // antes de que Agora intente dibujar el video.
       await Future.delayed(const Duration(milliseconds: 200));
 
-      print("Intentando unirse al canal: ${widget.channelName}");
       await _engine.joinChannel(
         token: widget.token,
         channelId: widget.channelName,
@@ -97,10 +114,10 @@ class _CallScreenState extends State<CallScreen> {
     }
   }
   
-  // --- UI de la llamada (sin cambios, pero se mantiene para referencia) ---
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    // Para el estilo pixel art que te gusta, mantenemos la lógica
     final isPixelTheme = theme.textTheme.bodyLarge?.fontFamily == 'PressStart2P';
 
     return Scaffold(
@@ -265,4 +282,3 @@ class _CallScreenState extends State<CallScreen> {
     );
   }
 }
-

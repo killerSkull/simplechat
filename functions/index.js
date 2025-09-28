@@ -1,15 +1,20 @@
 const functions = require("firebase-functions");
 const admin = require("firebase-admin");
-const { RtcTokenBuilder, RtcRole } = require("agora-access-token");
+// --- CORRECCIÓN FINAL: Se usa el paquete que indicaste ---
+const {RtcTokenBuilder, RtcRole} = require("agora-access-token");
 
 admin.initializeApp();
 
 // --- CREDENCIALES DE AGORA ---
-// Asegúrate de que estas credenciales son las correctas
-const APP_ID = "77d636faa353436a99029acd0095cefa";
-const APP_CERTIFICATE = "093b54f788cf462aae36c23b6430d1de";
+// ¡Mejora de seguridad! Mueve esto a variables de entorno en Firebase.
+// Ejecuta estos comandos en tu terminal:
+// firebase functions:config:set agora.app_id="TU_APP_ID"
+// firebase functions:config:set agora.app_certificate="TU_CERTIFICADO"
+const APP_ID = functions.config().agora.app_id;
+const APP_CERTIFICATE = functions.config().agora.app_certificate;
 
-// --- FUNCIÓN 1: Para generar tokens de Agora ---
+
+// --- FUNCIÓN 1: Para generar tokens de Agora (Mejorada) ---
 exports.generateAgoraToken = functions.https.onCall(async (data, context) => {
   if (!context.auth) {
     throw new functions.https.HttpsError("unauthenticated", "La función debe ser llamada por un usuario autenticado.");
@@ -18,6 +23,15 @@ exports.generateAgoraToken = functions.https.onCall(async (data, context) => {
   if (!channelName) {
     throw new functions.https.HttpsError("invalid-argument", "La función debe ser llamada con un argumento 'channelName'.");
   }
+
+  // --- Comprobación de que las variables de entorno existen ---
+  if (!APP_ID || !APP_CERTIFICATE) {
+    throw new functions.https.HttpsError(
+        "failed-precondition",
+        "Las credenciales de Agora (APP_ID y APP_CERTIFICATE) no están configuradas en el entorno.",
+    );
+  }
+
   const role = RtcRole.PUBLISHER;
   const expirationTimeInSeconds = 3600;
   const currentTimestamp = Math.floor(Date.now() / 1000);
@@ -25,42 +39,54 @@ exports.generateAgoraToken = functions.https.onCall(async (data, context) => {
 
   try {
     const token = RtcTokenBuilder.buildTokenWithUid(APP_ID, APP_CERTIFICATE, channelName, 0, role, privilegeExpiredTs);
-    return { token: token };
+    return {token: token};
   } catch (error) {
     console.error("Error al generar el token de Agora:", error);
     throw new functions.https.HttpsError("internal", "No se pudo generar el token de Agora.");
   }
 });
 
-// --- FUNCIÓN 2: Para notificar llamadas entrantes ---
-exports.sendCallNotification = functions.firestore
+
+// --- FUNCIÓN 2: Para notificar llamadas entrantes (Corregida y Unificada) ---
+exports.notifyIncomingCall = functions.firestore
     .document("calls/{callId}")
     .onCreate(async (snap, context) => {
       const callData = snap.data();
       if (!callData) return null;
 
-      const callerId = callData.callerId;
-      const calleeId = callData.calleeId;
-      const callType = callData.isVideoCall ? "videollamada" : "llamada de voz";
+      // --- CORRECCIÓN 2: Se usan los nombres de campo correctos ---
+      const receiverId = callData.receiver_id;
+      const callerName = callData.caller_name || "Alguien";
 
-      const callerDoc = await admin.firestore().collection("users").doc(callerId).get();
-      if (!callerDoc.exists) return null;
-      const callerName = callerDoc.data().display_name || "Alguien";
+      const calleeDoc = await admin.firestore().collection("users").doc(receiverId).get();
+      if (!calleeDoc.exists) {
+        console.log("No se encontró al usuario receptor:", receiverId);
+        return null;
+      }
 
-      const calleeDoc = await admin.firestore().collection("users").doc(calleeId).get();
-      if (!calleeDoc.exists) return null;
-      const calleeToken = calleeDoc.data().fcm_token;
-      if (!calleeToken) return null;
+      const fcmToken = calleeDoc.data().fcm_token;
+      if (!fcmToken) {
+        console.log("El usuario receptor no tiene un FCM token.");
+        return null;
+      }
 
       const payload = {
-        token: calleeToken,
+        token: fcmToken,
         notification: {
-          title: `Llamada entrante de ${callerName}`,
-          body: `Tienes una nueva ${callType}.`,
+          title: "Llamada entrante",
+          body: `Tienes una llamada de ${callerName}`,
+        },
+        data: {
+          // --- CORRECCIÓN 3: Se envían todos los datos necesarios a la app ---
+          type: "incoming_call",
+          caller_id: callData.caller_id,
+          caller_name: callerName,
+          receiver_id: receiverId,
+          is_video_call: String(callData.is_video_call),
+          channel_name: callData.channel_name,
         },
         android: {
           priority: "high",
-          notification: { sound: "default" },
         },
         apns: {
           payload: {
@@ -70,24 +96,21 @@ exports.sendCallNotification = functions.firestore
             },
           },
         },
-        data: {
-          "click_action": "FLUTTER_NOTIFICATION_CLICK",
-          type: "incoming_call",
-          callId: context.params.callId,
-          callerName: callerName,
-        },
       };
 
       try {
-        console.log(`Enviando notificación de llamada a ${calleeId}`);
-        return await admin.messaging().send(payload);
+        console.log(`Enviando notificación de llamada a ${receiverId}`);
+        await admin.messaging().send(payload);
+        console.log("Notificación enviada con éxito.");
+        return {success: true};
       } catch (error) {
-        console.error("Error al enviar notificación de llamada:", error);
-        return null;
+        console.error("Error al enviar la notificación:", error);
+        return {error: error.message};
       }
     });
 
-// --- FUNCIÓN 3: Para notificar mensajes de chat ---
+
+// --- FUNCIÓN 3: Para notificar mensajes de chat (Sin cambios) ---
 exports.sendChatNotification = functions.firestore
     .document("chats/{chatId}/messages/{messageId}")
     .onCreate(async (snap, context) => {
@@ -139,7 +162,8 @@ exports.sendChatNotification = functions.firestore
       }
     });
 
-// --- FUNCIÓN 4: Para notificar reacciones ---
+
+// --- FUNCIÓN 4: Para notificar reacciones (Sin cambios) ---
 exports.sendReactionNotification = functions.firestore
     .document("chats/{chatId}/messages/{messageId}")
     .onUpdate(async (change, context) => {
@@ -212,4 +236,3 @@ exports.sendReactionNotification = functions.firestore
             return null;
         }
     });
-

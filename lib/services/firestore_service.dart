@@ -2,13 +2,76 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 import 'package:simplechat/models/user_model.dart';
+import 'package:simplechat/services/agora_service.dart';
 import 'package:simplechat/services/storage_service.dart';
 
 class FirestoreService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
   final FirebaseAuth auth = FirebaseAuth.instance;
-
   var db;
+  // --- NUEVO: Métodos para gestionar llamadas ---
+
+  /// Obtiene un stream para escuchar los cambios en un documento de llamada.
+  Stream<DocumentSnapshot> getCallStream(String chatId) {
+    return _db.collection('calls').doc(chatId).snapshots();
+  }
+
+  /// Inicia una llamada creando un documento en Firestore.
+  /// Esto activará la Cloud Function que envía la notificación.
+  Future<void> startCall({
+    required String chatId,
+    required String recipientId,
+    required bool isVideoCall,
+  }) async {
+    final user = auth.currentUser;
+    if (user == null) return;
+
+    // 1. Obtiene el token de Agora necesario para unirse al canal.
+    final token = await AgoraService.fetchToken(chatId);
+    if (token == null) {
+      print("No se pudo obtener el token de Agora. Cancelando llamada.");
+      return;
+    }
+
+    // 2. Crea el documento de la llamada en la colección 'calls'.
+    await _db.collection('calls').doc(chatId).set({
+      'callerId': user.uid,
+      'callerName': user.displayName ?? 'Alguien',
+      'callerPhotoUrl': user.photoURL ?? '',
+      'recipientId': recipientId,
+      'token': token,
+      'isVideoCall': isVideoCall,
+      'status': 'ringing', // Estados: ringing, ongoing, ended, missed, rejected
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  /// Actualiza el estado de la llamada a 'ongoing' cuando el receptor contesta.
+  Future<void> answerCall(String chatId) async {
+    await _db.collection('calls').doc(chatId).update({'status': 'ongoing'});
+  }
+
+  /// Finaliza una llamada, actualizando su estado final.
+  Future<void> endCall(String chatId, String currentUserId) async {
+    final callDoc = await _db.collection('calls').doc(chatId).get();
+    if (!callDoc.exists) return;
+
+    final callData = callDoc.data()!;
+    final recipientId = callData['recipientId'];
+    final status = callData['status'];
+
+    String finalStatus = 'ended';
+
+    // Determina si la llamada fue rechazada o perdida en lugar de solo terminada.
+    if (status == 'ringing' && currentUserId == recipientId) {
+      finalStatus = 'rejected';
+    } else if (status == 'ringing') {
+      finalStatus = 'missed';
+    }
+
+    await _db.collection('calls').doc(chatId).update({'status': finalStatus});
+  }
+
 
   // --- (El resto de los métodos se mantienen igual) ---
 
@@ -261,7 +324,6 @@ class FirestoreService {
       transaction.update(messageRef, {'reactions': reactions});
     });
 
-    // --- CAMBIO 1: Actualizar el último mensaje en el chat ---
     final senderName = user.displayName ?? 'Alguien';
     await _db.collection('chats').doc(chatId).update({
       'last_message_text': '$senderName reaccionó con un $reaction',
@@ -290,7 +352,6 @@ class FirestoreService {
     if (user == null) return;
     final clearedAtField = 'cleared_at_for_${user.uid}';
     
-    // --- CAMBIO 2: Limpiar también el último mensaje visible en la lista ---
     final batch = _db.batch();
     final chatRef = _db.collection('chats').doc(chatId);
     
