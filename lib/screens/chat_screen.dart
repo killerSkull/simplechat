@@ -312,7 +312,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
               channelName: channelName,
               token: callData['token'],
               otherUserName: widget.nickname ?? widget.otherUser.displayName ?? 'Usuario',
-              isVideoCall: isVideoCall,
+              isVideoCall: isVideoCall, callId: '',
             ),
           ),
         );

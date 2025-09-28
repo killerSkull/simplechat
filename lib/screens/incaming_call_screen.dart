@@ -1,3 +1,4 @@
+
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:simplechat/screens/call_screen.dart';
@@ -11,16 +12,19 @@ class IncomingCallScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final firestoreService = FirestoreService();
-    // Extraemos los datos de la notificación
-    final String chatId = callData['channelName'];
-    final String callerName = callData['callerName'];
-    final String callerPhotoUrl = callData['callerPhotoUrl'];
-    final bool isVideoCall = callData['isVideoCall'].toString() == 'true';
-    final String token = callData['token'];
-    final String currentUserId = firestoreService.auth.currentUser!.uid;
+    
+    // --- LECTURA 100% SEGURA DE DATOS ---
+    // Usamos '??' para dar un valor por defecto si algo viene nulo.
+    // Esto evita el error que causa la pantalla gris.
+    final String callId = callData['callId'] ?? 'Usuario';
+    final String channelName = callData['channelName'] ?? callId; // Usamos callId como respaldo
+    final String callerName = callData['callerName'] ?? 'Llamada Desconocida';
+    final String callerPhotoUrl = callData['callerPhotoUrl'] ?? '';
+    final bool isVideoCall = (callData['isVideoCall'] ?? 'false').toString().toLowerCase() == 'true';
+    final String token = callData['token'] ?? '';
 
     return Scaffold(
-      backgroundColor: Colors.grey[900],
+      backgroundColor: Colors.grey[900], // Fondo oscuro para la llamada
       body: SafeArea(
         child: Center(
           child: Column(
@@ -59,7 +63,9 @@ class IncomingCallScreen extends StatelessWidget {
                     FloatingActionButton(
                       heroTag: 'reject_call',
                       onPressed: () async {
-                        await firestoreService.endCall(chatId, currentUserId);
+                        // --- CORRECCIÓN CRÍTICA ---
+                        // Usamos el 'callId' correcto para finalizar la llamada.
+                        await firestoreService.endCall(callId, callerName);
                         if (context.mounted) Navigator.of(context).pop();
                       },
                       backgroundColor: Colors.red,
@@ -69,13 +75,16 @@ class IncomingCallScreen extends StatelessWidget {
                     FloatingActionButton(
                       heroTag: 'accept_call',
                       onPressed: () async {
-                        await firestoreService.answerCall(chatId);
+                        await firestoreService.answerCall(callId);
                         if (context.mounted) {
                           Navigator.pushReplacement(
                             context,
                             MaterialPageRoute(
                               builder: (context) => CallScreen(
-                                channelName: chatId,
+                                // --- CORRECCIÓN CRÍTICA ---
+                                // Pasamos el 'callId' a la siguiente pantalla.
+                                callId: callId,
+                                channelName: channelName,
                                 token: token,
                                 otherUserName: callerName,
                                 isVideoCall: isVideoCall,

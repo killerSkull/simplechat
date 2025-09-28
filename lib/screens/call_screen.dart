@@ -1,10 +1,13 @@
 import 'dart:async';
 import 'package:agora_rtc_engine/agora_rtc_engine.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:simplechat/services/agora_service.dart';
 import 'package:simplechat/services/firestore_service.dart';
 
 class CallScreen extends StatefulWidget {
+  final String callId;
   final String channelName;
   final String token;
   final String otherUserName;
@@ -12,10 +15,11 @@ class CallScreen extends StatefulWidget {
 
   const CallScreen({
     super.key,
+    required this.callId,
     required this.channelName,
     required this.token,
     required this.otherUserName,
-    this.isVideoCall = true,
+    required this.isVideoCall,
   });
 
   @override
@@ -24,8 +28,12 @@ class CallScreen extends StatefulWidget {
 
 class _CallScreenState extends State<CallScreen> {
   late final RtcEngine _engine;
-  late final FirestoreService _firestoreService;
-  StreamSubscription? _callStreamSubscription;
+  final FirestoreService firestoreService = FirestoreService();
+  final User? currentUser = FirebaseAuth.instance.currentUser;
+
+  // --- NUEVO: Se usa una suscripción en lugar de un StreamBuilder ---
+  // Esto separa la lógica de la UI y evita cierres inesperados.
+  StreamSubscription<DocumentSnapshot>? _callSubscription;
 
   int? _remoteUid;
   bool _localUserJoined = false;
@@ -35,30 +43,30 @@ class _CallScreenState extends State<CallScreen> {
   @override
   void initState() {
     super.initState();
-    _firestoreService = FirestoreService();
     _initializeAgora();
-    _listenToCallChanges();
+    _listenForCallEnd();
   }
 
   @override
   void dispose() {
-    _firestoreService.endCall(widget.channelName, _firestoreService.auth.currentUser!.uid);
-    _callStreamSubscription?.cancel();
+    _callSubscription?.cancel();
     _engine.leaveChannel();
     _engine.release();
+    // --- LÓGICA DE FINALIZACIÓN DE LLAMADA ---
+    // Al salir de la pantalla, se elimina el documento de la llamada para todos.
+    if (currentUser != null) {
+      firestoreService.endCall(widget.callId, currentUser!.uid);
+    }
     super.dispose();
   }
 
-  void _listenToCallChanges() {
-    _callStreamSubscription = _firestoreService.getCallStream(widget.channelName).listen((doc) {
-      if (doc.exists) {
-        final data = doc.data() as Map<String, dynamic>;
-        final status = data['status'];
-        if (status != 'ongoing' && status != 'ringing') {
-          if (mounted) Navigator.of(context).pop();
-        }
-      } else {
-         if (mounted) Navigator.of(context).pop();
+  // --- NUEVO: Lógica de escucha aislada ---
+  void _listenForCallEnd() {
+    _callSubscription =
+        firestoreService.getCallStream(widget.callId).listen((snapshot) {
+      // Si el documento de la llamada deja de existir, significa que alguien colgó.
+      if (mounted && !snapshot.exists) {
+        Navigator.of(context).pop();
       }
     });
   }
@@ -68,10 +76,6 @@ class _CallScreenState extends State<CallScreen> {
       _engine = createAgoraRtcEngine();
       await _engine.initialize(RtcEngineContext(appId: AgoraService.appId));
 
-      // --- CORRECCIÓN DEFINITIVA ---
-      // Se establece el perfil del canal a "Comunicación". Esto le dice a Agora
-      // que optimice para una llamada 1 a 1 de baja latencia. Es crucial
-      // hacerlo después de inicializar y antes de unirse.
       await _engine.setChannelProfile(ChannelProfileType.channelProfileCommunication);
 
       _engine.registerEventHandler(
@@ -84,7 +88,7 @@ class _CallScreenState extends State<CallScreen> {
           },
           onUserOffline: (connection, remoteUid, reason) {
             setState(() => _remoteUid = null);
-            if (mounted) Navigator.of(context).pop();
+            // El cierre ahora es manejado por _listenForCallEnd
           },
           onError: (err, msg) {
             print("Error de Agora: $err - $msg");
@@ -96,12 +100,9 @@ class _CallScreenState extends State<CallScreen> {
         await _engine.enableVideo();
         await _engine.startPreview();
       } else {
-        await _engine.disableVideo();
+        await _engine.disableVideo(); // Explícitamente desactiva el video
         await _engine.enableAudio();
-        setState(() => _isVideoDisabled = true);
       }
-
-      await Future.delayed(const Duration(milliseconds: 200));
 
       await _engine.joinChannel(
         token: widget.token,
@@ -113,28 +114,26 @@ class _CallScreenState extends State<CallScreen> {
       print("--- ERROR FATAL AL INICIALIZAR AGORA: $e ---");
     }
   }
-  
+
+  // --- La UI se mantiene prácticamente igual, pero ahora es más estable ---
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    // Para el estilo pixel art que te gusta, mantenemos la lógica
-    final isPixelTheme = theme.textTheme.bodyLarge?.fontFamily == 'PressStart2P';
-
     return Scaffold(
       backgroundColor: Colors.black,
       body: Center(
         child: Stack(
           children: [
             _buildRemoteVideo(),
-            if (_localUserJoined)
+            if (_localUserJoined && !_isVideoDisabled)
               Positioned(
                 top: 50,
                 right: 20,
                 child: _buildLocalVideo(),
               ),
-            _buildCallControls(isPixelTheme),
-            if (!_localUserJoined) const Center(child: CircularProgressIndicator()),
+            _buildCallControls(),
             _buildTopInfo(),
+             if (!_localUserJoined)
+              const Center(child: CircularProgressIndicator()),
           ],
         ),
       ),
@@ -213,7 +212,10 @@ class _CallScreenState extends State<CallScreen> {
     return const SizedBox.shrink();
   }
 
-  Widget _buildCallControls(bool isPixelTheme) {
+  Widget _buildCallControls() {
+    final theme = Theme.of(context);
+    final isPixelTheme = theme.textTheme.bodyLarge?.fontFamily == 'PressStart2P';
+
     return Positioned(
       bottom: 40,
       left: 20,
@@ -234,11 +236,11 @@ class _CallScreenState extends State<CallScreen> {
           if (widget.isVideoCall)
             _buildControlButton(
               onPressed: () {
-                _engine.enableLocalVideo(!_isVideoDisabled);
                 setState(() => _isVideoDisabled = !_isVideoDisabled);
+                _engine.enableLocalVideo(!_isVideoDisabled);
               },
               icon: _isVideoDisabled ? Icons.videocam_off : Icons.videocam,
-              color: _isVideoDisabled ? Colors.red : Colors.white,
+              color: Colors.white,
               backgroundColor: Colors.white.withOpacity(0.2),
               isPixel: isPixelTheme,
             ),
@@ -252,7 +254,8 @@ class _CallScreenState extends State<CallScreen> {
             ),
           _buildControlButton(
             onPressed: () {
-              if (mounted) Navigator.of(context).pop();
+              // Simplemente cierra la pantalla. El método dispose se encargará del resto.
+              Navigator.of(context).pop();
             },
             icon: Icons.call_end,
             color: Colors.white,
