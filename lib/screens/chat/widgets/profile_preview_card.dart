@@ -1,12 +1,11 @@
-// Archivo: profile_preview_card.dart
-
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:simplechat/models/user_model.dart';
 import 'package:simplechat/screens/chat_screen.dart';
 import 'package:simplechat/screens/contact_profile_screen.dart';
 
-void showProfilePreview(BuildContext context, UserModel user, String? nickname) {
+// --- CORRECCIÓN: Ahora la función recibe el 'chatId' para poder navegar correctamente ---
+void showProfilePreview(BuildContext context, UserModel user, String? nickname, String chatId) {
   showDialog(
     context: context,
     builder: (BuildContext context) {
@@ -16,7 +15,6 @@ void showProfilePreview(BuildContext context, UserModel user, String? nickname) 
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // ... (el resto del widget de imagen se queda igual)
             SizedBox(
               height: 250,
               width: double.infinity,
@@ -41,7 +39,7 @@ void showProfilePreview(BuildContext context, UserModel user, String? nickname) 
                     top: 8,
                     left: 16,
                     child: Text(
-                      nickname ?? user.displayName ?? 'Usuario', // <-- CAMBIO: Usa el nickname si existe
+                      nickname ?? user.displayName ?? 'Usuario',
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 20,
@@ -66,8 +64,12 @@ void showProfilePreview(BuildContext context, UserModel user, String? nickname) 
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          // <-- CAMBIO: Pasa el nickname a ChatScreen
-                          builder: (context) => ChatScreen(otherUser: user, nickname: nickname, chatId: 'chatId',),
+                          // --- CORRECCIÓN: Usa el chatId que se pasó a la función ---
+                          builder: (context) => ChatScreen(
+                            otherUser: user,
+                            nickname: nickname,
+                            chatId: chatId,
+                          ),
                         ),
                       );
                     },
@@ -95,7 +97,6 @@ void showProfilePreview(BuildContext context, UserModel user, String? nickname) 
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          // <-- CAMBIO: Pasa el nickname a ContactProfileScreen
                           builder: (context) => ContactProfileScreen(user: user, nickname: nickname),
                         ),
                       );

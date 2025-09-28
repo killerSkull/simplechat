@@ -1,8 +1,7 @@
-import 'package:firebase_ui_auth/firebase_ui_auth.dart' as ui; // Se añade un prefijo 'ui'
+import 'package:firebase_ui_auth/firebase_ui_auth.dart' as ui;
 import 'package:flutter/material.dart';
 import '../services/firestore_service.dart';
-
-// Se añaden los imports que faltaban
+// --- CORRECCIÓN: Se añade el import que faltaba para el proveedor de Google ---
 import 'package:firebase_ui_oauth_google/firebase_ui_oauth_google.dart'; 
 
 class LoginPage extends StatelessWidget {
@@ -10,20 +9,20 @@ class LoginPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Se usa el prefijo 'ui' para especificar de dónde vienen los widgets
+    // Se usa el prefijo 'ui' para evitar ambigüedad con otros paquetes
     return ui.SignInScreen(
       providers: [
-        ui.EmailAuthProvider(), // <- Solucionado: Ahora es explícitamente de firebase_ui_auth
-        // Ahora sí, 'GoogleProvider' se reconoce correctamente
+        ui.EmailAuthProvider(),
+        // Ahora 'GoogleProvider' se reconoce correctamente
         GoogleProvider(
             clientId:
                 "29978125325-12h8sm9dtgc0nbp8mbp6saecnf6bok68.apps.googleusercontent.com"),
       ],
       // Llama a createUserProfile después de un inicio de sesión exitoso.
       actions: [
-        // Se usa el prefijo 'ui' aquí también
         ui.AuthStateChangeAction<ui.SignedIn>((context, state) {
           if (state.user != null) {
+            // Crea un perfil básico en Firestore en cuanto el usuario se registra
             FirestoreService().createUserProfile(state.user!);
           }
         }),

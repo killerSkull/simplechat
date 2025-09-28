@@ -7,7 +7,6 @@ import 'package:simplechat/screens/add_contact_screen.dart' hide showProfilePrev
 import 'package:simplechat/screens/chat/widgets/profile_preview_card.dart';
 import '../models/user_model.dart';
 import '../services/firestore_service.dart';
-// --- CORRECCIÓN AQUÍ: Se añade el import que faltaba ---
 import 'chat_screen.dart';
 import 'settings_screen.dart';
 
@@ -237,7 +236,8 @@ class _ChatListPageState extends State<ChatListPage> {
                     return ListTile(
                       onLongPress: () => _showChatOptionsDialog(context, user, nickname, chatDoc.id),
                       leading: GestureDetector(
-                        onTap: () => showProfilePreview(context, user, nickname),
+                        // --- CORRECCIÓN: Pasamos el ID del chat real al preview ---
+                        onTap: () => showProfilePreview(context, user, nickname, chatDoc.id),
                         child: Stack(
                           clipBehavior: Clip.none,
                           children: [
@@ -280,10 +280,17 @@ class _ChatListPageState extends State<ChatListPage> {
                             )
                           : const SizedBox.shrink(),
                       onTap: () {
+                        // --- CORRECCIÓN CRÍTICA ---
+                        // Antes aquí pasabas un 'chatId' de texto. Ahora usas el ID real del documento del chat.
+                        // Esto es fundamental para que se carguen los mensajes correctos.
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (context) => ChatScreen(otherUser: user, nickname: nickname, chatId: 'chatId',),
+                            builder: (context) => ChatScreen(
+                              otherUser: user,
+                              nickname: nickname,
+                              chatId: chatDoc.id,
+                            ),
                           ),
                         );
                       },

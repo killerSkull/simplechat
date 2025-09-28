@@ -71,10 +71,11 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
       
       String? photoUrl;
       if (_imageFile != null) {
-        photoUrl = (await _storageService.uploadProfileImage(
+        final uploadTask = _storageService.uploadProfileImage(
           userId: widget.user.uid,
           file: _imageFile!,
-        )) as String?;
+        );
+        photoUrl = await (await uploadTask).ref.getDownloadURL();
       }
 
       final fullPhoneNumber = '+${_selectedCountry.phoneCode}${_phoneController.text.trim()}';
@@ -85,14 +86,14 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
         status: _statusController.text.trim(),
         phoneNumber: fullPhoneNumber,
         photoUrl: photoUrl ?? widget.user.photoURL,
-        // --- ESTA ES LA LÍNEA CLAVE QUE FALTABA ---
+        // --- CORRECCIÓN CRÍTICA ---
+        // Se establece 'profileCompleted' en true.
+        // Sin esto, la app te enviaría a esta pantalla en un bucle infinito.
         profileCompleted: true, 
       );
 
-      if (mounted) {
-        // No necesitamos setState(false) aquí porque la navegación desmontará el widget.
-        // El AuthGate se encargará de llevarnos a la siguiente pantalla.
-      }
+      // No necesitamos setState(false) porque AuthGate nos llevará a la siguiente pantalla
+      // una vez que el perfil esté marcado como completo.
     }
   }
 

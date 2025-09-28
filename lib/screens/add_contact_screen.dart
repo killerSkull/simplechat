@@ -5,7 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import '../models/user_model.dart';
 import '../services/firestore_service.dart';
-import 'chat_screen.dart'; // <-- CORRECCIÓN AQUÍ
+import 'chat_screen.dart';
 
 class AddContactScreen extends StatefulWidget {
   const AddContactScreen({super.key});
@@ -271,9 +271,18 @@ class _AddContactScreenState extends State<AddContactScreen> {
                   title: Text(nickname ?? user.displayName ?? 'Usuario'),
                   subtitle: Text(user.status ?? ''),
                   onTap: () {
+                     // --- CORRECCIÓN CRÍTICA ---
+                     // Al tocar un contacto, generamos el ID de chat correcto
+                     // para poder abrir la conversación existente o crear una nueva.
+                     if (_currentUser == null) return;
+                     final chatId = _firestoreService.getChatId(_currentUser!.uid, user.uid);
                      Navigator.push(
                         context,
-                        MaterialPageRoute(builder: (context) => ChatScreen(otherUser: user, nickname: nickname, chatId: 'chatId',)),
+                        MaterialPageRoute(builder: (context) => ChatScreen(
+                          otherUser: user,
+                          nickname: nickname,
+                          chatId: chatId,
+                        )),
                       );
                   },
                 );
