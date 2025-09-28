@@ -140,7 +140,7 @@ class NotificationService {
 
         navigatorKey.currentState?.push(
           MaterialPageRoute(
-            builder: (context) => ChatScreen(otherUser: userModel, nickname: nickname),
+            builder: (context) => ChatScreen(otherUser: userModel, nickname: nickname, chatId: 'chatId',),
           ),
         );
       }

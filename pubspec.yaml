@@ -78,6 +78,11 @@ dependencies:
   filesize: ^2.0.1
   dio: ^5.4.3+1
 
+  # Versión actualizada según recomendación de Agora para Video y Voice SDK
+  agora_rtc_engine: ^6.5.2
+  cloud_functions: ^4.7.6
+
+
 
 
 dev_dependencies:
@@ -90,7 +95,7 @@ dev_dependencies:
   # activated in the `analysis_options.yaml` file located at the root of your
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
-  flutter_lints: ^5.0.0
+  flutter_lints: ^2.0.3
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec

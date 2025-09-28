@@ -246,38 +246,42 @@ class ChatStateManager with ChangeNotifier {
   }
 
   void _showReactionOverlay(DocumentSnapshot messageDoc, Offset tapPosition) async {
-    final reactions = ['👍', '❤️', '😂', '😯', '😢', '🙏'];
-    final RenderBox overlay = context.findRenderObject() as RenderBox;
-
-    final selectedReaction = await showMenu<String>(
+    final selectedReaction = await showDialog<String>(
       context: context,
-      position: RelativeRect.fromRect(
-        Rect.fromPoints(tapPosition, tapPosition),
-        Offset.zero & overlay.size,
-      ),
-      items: [
-        PopupMenuItem(
-          enabled: false,
-          child: Wrap(
-            spacing: 8.0,
-            children: reactions.map((reaction) {
-              return InkWell(
-                onTap: () => Navigator.pop(context, reaction),
-                child: Text(reaction, style: const TextStyle(fontSize: 24)),
-              );
-            }).toList(),
-          ),
-        )
-      ],
+      barrierColor: Colors.black.withOpacity(0.1), // Un fondo sutil
+      builder: (BuildContext context) {
+        // Calcula el tamaño y la posición del overlay
+        final screenWidth = MediaQuery.of(context).size.width;
+        final dialogWidth = screenWidth * 0.8; // El diálogo ocupa el 80% del ancho
+        final dialogHeight = 52.0; // Altura fija
+
+        // Centra el diálogo horizontalmente en la posición del toque, pero evita que se salga de la pantalla
+        final left = (tapPosition.dx - (dialogWidth / 2)).clamp(8.0, screenWidth - dialogWidth - 8.0);
+        // Posiciona el diálogo encima del mensaje
+        final top = (tapPosition.dy - dialogHeight - 12).clamp(8.0, MediaQuery.of(context).size.height - dialogHeight - 8.0);
+
+        return Stack(
+          children: [
+            Positioned(
+              left: left,
+              top: top,
+              child: SizedBox(
+                width: dialogWidth,
+                height: dialogHeight,
+                child: _ReactionsDialog(),
+              ),
+            ),
+          ],
+        );
+      },
     );
 
     if (selectedReaction != null) {
       await firestoreService.toggleReaction(chatId, messageDoc.id, selectedReaction);
-      // --- CAMBIO: Se sale del modo selección DESPUÉS de reaccionar ---
       exitSelectionMode();
     } else {
-      // --- CAMBIO: Si se cierra el menú sin reaccionar, NO salimos del modo selección ---
-      // No hacemos nada para que la AppBar se mantenga.
+      // Per the original logic, do nothing if no reaction is selected,
+      // leaving the user in selection mode.
     }
   }
 
@@ -317,5 +321,45 @@ class ChatStateManager with ChangeNotifier {
       }
     }
     exitSelectionMode();
+  }
+}
+
+// --- WIDGET DE DIÁLOGO DE REACCIONES MEJORADO ---
+// Más pequeño, deslizable y con un estilo similar a WhatsApp.
+class _ReactionsDialog extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    // Lista de emojis ampliada para que el deslizamiento sea útil
+    final reactions = ['👍', '❤️', '😂', '😯', '😢', '🙏', '🔥', '🎉', '💯', '👏', '😮', '😍'];
+    final theme = Theme.of(context);
+
+    return Card(
+      color: theme.dialogTheme.backgroundColor,
+      shape: theme.dialogTheme.shape ?? const StadiumBorder(), // Bordes redondeados como una píldora
+      elevation: theme.dialogTheme.elevation ?? 8,
+      margin: EdgeInsets.zero,
+      clipBehavior: Clip.antiAlias,
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        itemCount: reactions.length,
+        itemBuilder: (context, index) {
+          final reaction = reactions[index];
+          return InkWell(
+            onTap: () => Navigator.pop(context, reaction),
+            borderRadius: BorderRadius.circular(24),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8.0),
+              child: Center(
+                child: Text(
+                  reaction,
+                  style: const TextStyle(fontSize: 26),
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
   }
 }

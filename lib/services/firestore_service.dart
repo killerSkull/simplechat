@@ -446,4 +446,3 @@ class FirestoreService {
     return history.toString();
   }
 }
-

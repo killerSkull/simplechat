@@ -3,6 +3,7 @@
 #
 
 list(APPEND FLUTTER_PLUGIN_LIST
+  agora_rtc_engine
   cloud_firestore
   connectivity_plus
   desktop_webview_auth
@@ -12,6 +13,7 @@ list(APPEND FLUTTER_PLUGIN_LIST
   firebase_core
   firebase_storage
   gal
+  iris_method_channel
   permission_handler_windows
   share_plus
   url_launcher_windows

@@ -273,7 +273,7 @@ class _AddContactScreenState extends State<AddContactScreen> {
                   onTap: () {
                      Navigator.push(
                         context,
-                        MaterialPageRoute(builder: (context) => ChatScreen(otherUser: user, nickname: nickname)),
+                        MaterialPageRoute(builder: (context) => ChatScreen(otherUser: user, nickname: nickname, chatId: 'chatId',)),
                       );
                   },
                 );

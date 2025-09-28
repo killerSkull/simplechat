@@ -67,7 +67,7 @@ void showProfilePreview(BuildContext context, UserModel user, String? nickname) 
                         context,
                         MaterialPageRoute(
                           // <-- CAMBIO: Pasa el nickname a ChatScreen
-                          builder: (context) => ChatScreen(otherUser: user, nickname: nickname),
+                          builder: (context) => ChatScreen(otherUser: user, nickname: nickname, chatId: 'chatId',),
                         ),
                       );
                     },

@@ -14,6 +14,9 @@ class ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
   final ValueChanged<bool> onToggleSearch;
   final TextEditingController searchController;
   final ValueChanged<String> onMenuSelected;
+  // --- NUEVO: Callbacks para iniciar llamadas ---
+  final VoidCallback onStartVideoCall;
+  final VoidCallback onStartVoiceCall;
 
   const ChatAppBar({
     super.key,
@@ -24,35 +27,32 @@ class ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
     required this.onToggleSearch,
     required this.searchController,
     required this.onMenuSelected,
+    required this.onStartVideoCall,
+    required this.onStartVoiceCall,
   });
 
-  // --- NUEVA FUNCIÓN PARA FORMATEAR LA FECHA ---
   String _formatLastSeen(DateTime lastSeen) {
-    // Aseguramos que los nombres de los días salgan en español
     Intl.defaultLocale = 'es';
-    
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final yesterday = DateTime(now.year, now.month, now.day - 1);
     final lastSeenDate = DateTime(lastSeen.year, lastSeen.month, lastSeen.day);
 
     if (lastSeenDate == today) {
-      // Si fue hoy, muestra la hora
       return 'últ. vez hoy a las ${DateFormat('h:mm a').format(lastSeen)}';
     } else if (lastSeenDate == yesterday) {
-      // Si fue ayer, muestra "ayer" y la hora
       return 'últ. vez ayer a las ${DateFormat('h:mm a').format(lastSeen)}';
     } else if (now.difference(lastSeen).inDays < 7) {
-      // Si fue en los últimos 7 días, muestra el nombre del día
       return 'últ. vez el ${DateFormat('EEEE').format(lastSeen)}';
     } else {
-      // Si fue hace más tiempo, muestra la fecha completa
       return 'últ. vez el ${DateFormat('d/M/y').format(lastSeen)}';
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     if (isSearching) {
       return AppBar(
         leading: IconButton(
@@ -66,7 +66,7 @@ class ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
             hintText: 'Buscar mensajes...',
             border: InputBorder.none,
           ),
-          style: TextStyle(color: Theme.of(context).appBarTheme.foregroundColor),
+          style: TextStyle(color: theme.appBarTheme.foregroundColor),
         ),
       );
     }
@@ -100,37 +100,49 @@ class ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
                       : null,
                 ),
                 const SizedBox(width: 12),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(nickname ?? user.displayName ?? 'Usuario', style: const TextStyle(fontSize: 16)),
-                    StreamBuilder<DocumentSnapshot>(
-                      stream: FirestoreService().getChatStream(chatId),
-                      builder: (context, typingSnapshot) {
-                        String subtitleText = 'desconectado';
-                        Color subtitleColor = Theme.of(context).appBarTheme.foregroundColor?.withOpacity(0.7) ?? Colors.white70;
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        nickname ?? user.displayName ?? 'Usuario', 
+                        style: theme.textTheme.titleLarge?.copyWith(
+                          color: theme.appBarTheme.foregroundColor
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      StreamBuilder<DocumentSnapshot>(
+                        stream: FirestoreService().getChatStream(chatId),
+                        builder: (context, typingSnapshot) {
+                          String subtitleText = 'desconectado';
+                          Color subtitleColor = theme.appBarTheme.foregroundColor?.withOpacity(0.7) ?? Colors.white70;
 
-                        if (user.presence) {
-                           subtitleText = 'en línea';
-                           subtitleColor = Colors.greenAccent;
-                        } else if (user.lastSeen != null) {
-                          // --- CAMBIO: Se llama a la nueva función ---
-                          subtitleText = _formatLastSeen(user.lastSeen!);
-                          subtitleColor = Theme.of(context).appBarTheme.foregroundColor?.withOpacity(0.7) ?? Colors.white70;
-                        }
-
-                        if (typingSnapshot.hasData && typingSnapshot.data!.exists) {
-                          final data = typingSnapshot.data!.data() as Map<String, dynamic>;
-                          final typingUids = List<String>.from(data['typing_status'] ?? []);
-                          if (typingUids.contains(otherUser.uid)) {
-                            subtitleText = 'Escribiendo...';
-                            subtitleColor = Colors.greenAccent;
+                          if (user.presence) {
+                             subtitleText = 'en línea';
+                             subtitleColor = Colors.greenAccent;
+                          } else if (user.lastSeen != null) {
+                            subtitleText = _formatLastSeen(user.lastSeen!);
+                            subtitleColor = theme.appBarTheme.foregroundColor?.withOpacity(0.7) ?? Colors.white70;
                           }
-                        }
-                        return Text(subtitleText, style: TextStyle(fontSize: 12, color: subtitleColor));
-                      },
-                    ),
-                  ],
+
+                          if (typingSnapshot.hasData && typingSnapshot.data!.exists) {
+                            final data = typingSnapshot.data!.data() as Map<String, dynamic>;
+                            final typingUids = List<String>.from(data['typing_status'] ?? []);
+                            if (typingUids.contains(otherUser.uid)) {
+                              subtitleText = 'Escribiendo...';
+                              subtitleColor = Colors.greenAccent;
+                            }
+                          }
+                          return Text(
+                            subtitleText, 
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color: subtitleColor
+                            )
+                          );
+                        },
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
@@ -138,6 +150,15 @@ class ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
         },
       ),
       actions: [
+        // --- NUEVOS BOTONES DE LLAMADA ---
+        IconButton(
+          icon: const Icon(Icons.videocam),
+          onPressed: onStartVideoCall,
+        ),
+        IconButton(
+          icon: const Icon(Icons.call),
+          onPressed: onStartVoiceCall,
+        ),
         PopupMenuButton<String>(
           onSelected: onMenuSelected,
           itemBuilder: (BuildContext context) {
