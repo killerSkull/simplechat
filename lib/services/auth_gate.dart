@@ -24,7 +24,7 @@ class AuthGate extends StatelessWidget {
         // Si hay un usuario, INICIAMOS el servicio de notificaciones.
         // Esto es crucial para que el token se guarde después de iniciar sesión.
         final notificationService = context.read<NotificationService>();
-        notificationService.initNotifications();
+        notificationService.init();
 
         // Luego, comprobamos si el perfil del usuario está completo.
         return ProfileCheck(user: snapshot.data!);

@@ -1,10 +1,10 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
+import 'package:simplechat/screens/incaming_call_screen.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:simplechat/models/user_model.dart';
 import 'package:simplechat/screens/chat_screen.dart';
-import 'package:simplechat/screens/incaming_call_screen.dart';
 import 'package:simplechat/services/app_state.dart';
 import 'package:simplechat/services/firestore_service.dart';
 
@@ -19,7 +19,11 @@ class NotificationService {
   
   final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
-  Future<void> initNotifications() async {
+  static String? currentHandledCallId;
+
+  /// --- PASO 1: INICIALIZACIÓN BÁSICA ---
+  /// Esto se puede ejecutar de forma segura antes de que la UI se construya.
+  Future<void> init() async {
     await _firebaseMessaging.requestPermission();
 
     final fcmToken = await _firebaseMessaging.getToken();
@@ -33,61 +37,85 @@ class NotificationService {
 
     FirebaseMessaging.onBackgroundMessage(_firebaseBackgroundHandler);
     await _initLocalNotifications();
-    await _setupInteractedMessage();
+    
+    // Configura los listeners para cuando la app está abierta o en segundo plano
+    FirebaseMessaging.onMessage.listen(_onForegroundMessage);
+    FirebaseMessaging.onMessageOpenedApp.listen(_handleMessage);
+  }
 
-    // --- MODIFICADO: Ahora el listener distingue entre tipos de mensaje ---
-    FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-      print("Mensaje recibido en primer plano!");
-      final type = message.data['type'];
+  /// --- PASO 2: GESTIÓN DE INTERACCIÓN ---
+  /// Esta función SÓLO debe llamarse después de que la UI esté lista.
+  /// Se encarga de la notificación que abre la app desde un estado terminado.
+  Future<void> setupInteractedMessage() async {
+    RemoteMessage? initialMessage = await _firebaseMessaging.getInitialMessage();
+    if (initialMessage != null) {
+      // Añadimos un pequeño retraso para garantizar que el Navigator esté 100% listo.
+      Future.delayed(const Duration(milliseconds: 500), () {
+        _handleMessage(initialMessage);
+      });
+    }
+  }
 
-      if (type == 'incoming_call') {
-        // Si es una llamada y la app está abierta, navegamos directamente
-        _handleIncomingCall(message.data);
-      } else {
-        // Si es un mensaje de chat, usamos la lógica anterior
-        final chatId = message.data['chatId'];
-        if (AppState().activeChatId == chatId) {
-          return;
-        }
-        if (message.notification != null) {
-          showLocalNotification(message);
-        }
+  // --- (El resto del archivo se mantiene igual, pero lo incluyo para que esté completo) ---
+
+  void _onForegroundMessage(RemoteMessage message) {
+    print("Mensaje recibido en primer plano!");
+    final type = message.data['type'];
+
+    if (type == 'incoming_call') {
+      _handleIncomingCall(message.data);
+    } else {
+      final chatId = message.data['chatId'];
+      if (AppState().activeChatId == chatId) {
+        return;
       }
-    });
+      if (message.notification != null) {
+        showLocalNotification(message);
+      }
+    }
+  }
+
+  void _handleMessage(RemoteMessage message) {
+    final type = message.data['type'];
+    if (type == 'incoming_call') {
+      _handleIncomingCall(message.data);
+    } else {
+      _handleChatMessage(message.data);
+    }
+  }
+  
+  void _handleIncomingCall(Map<String, dynamic> data) {
+    final String? callId = data['callId'];
+    if (callId == null || callId.isEmpty || callId == currentHandledCallId) {
+      return;
+    }
+    currentHandledCallId = callId;
+
+    // Usamos el navigatorKey.currentState, que ahora sabemos que está listo.
+    navigatorKey.currentState?.push(
+      MaterialPageRoute(
+        builder: (context) => IncomingCallScreen(callData: data),
+        fullscreenDialog: true,
+      ),
+    );
   }
 
   Future<void> _initLocalNotifications() async {
     const AndroidNotificationChannel channel = AndroidNotificationChannel(
-      'high_importance_channel',
-      'High Importance Notifications',
+      'high_importance_channel', 'High Importance Notifications',
       description: 'Este canal se usa para notificaciones importantes.',
-      importance: Importance.max,
-      playSound: true,
-    );
+      importance: Importance.max, playSound: true);
 
     const AndroidInitializationSettings initializationSettingsAndroid =
         AndroidInitializationSettings('notification_icon');
     const DarwinInitializationSettings initializationSettingsIOS =
         DarwinInitializationSettings(
-          requestSoundPermission: true,
-          requestBadgePermission: true,
-          requestAlertPermission: true,
-        );
+          requestSoundPermission: true, requestBadgePermission: true, requestAlertPermission: true);
     const InitializationSettings initializationSettings = InitializationSettings(
-      android: initializationSettingsAndroid,
-      iOS: initializationSettingsIOS,
-    );
+      android: initializationSettingsAndroid, iOS: initializationSettingsIOS);
 
-    await _localNotifications.initialize(
-      initializationSettings,
-      onDidReceiveNotificationResponse: (details) {
-        // Esta lógica ahora se centraliza en _setupInteractedMessage
-      },
-    );
-
-    await _localNotifications
-        .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
-        ?.createNotificationChannel(channel);
+    await _localNotifications.initialize(initializationSettings);
+    await _localNotifications.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()?.createNotificationChannel(channel);
   }
 
   void showLocalNotification(RemoteMessage message) {
@@ -97,57 +125,16 @@ class NotificationService {
       message.notification?.body,
       NotificationDetails(
         android: AndroidNotificationDetails(
-          'high_importance_channel',
-          'High Importance Notifications',
+          'high_importance_channel', 'High Importance Notifications',
           channelDescription: 'Este canal se usa para notificaciones importantes.',
-          icon: 'notification_icon',
-          importance: Importance.max,
-          priority: Priority.high,
-          playSound: true,
-        ),
+          icon: 'notification_icon', importance: Importance.max, priority: Priority.high, playSound: true),
         iOS: const DarwinNotificationDetails(
-          sound: 'default',
-          presentAlert: true,
-          presentBadge: true,
-          presentSound: true,
-        ),
+          sound: 'default', presentAlert: true, presentBadge: true, presentSound: true),
       ),
       payload: message.data.toString(),
     );
   }
 
-  Future<void> _setupInteractedMessage() async {
-    RemoteMessage? initialMessage = await _firebaseMessaging.getInitialMessage();
-    if (initialMessage != null) {
-      _handleMessage(initialMessage);
-    }
-    FirebaseMessaging.onMessageOpenedApp.listen(_handleMessage);
-  }
-
-  /// --- MODIFICADO: Este método ahora actúa como un 'router' ---
-  /// Decide qué hacer basado en el tipo de notificación.
-  void _handleMessage(RemoteMessage message) {
-    final type = message.data['type'];
-    if (type == 'incoming_call') {
-      _handleIncomingCall(message.data);
-    } else {
-      _handleChatMessage(message.data);
-    }
-  }
-
-  /// --- NUEVO: Lógica específica para manejar una llamada entrante ---
-  void _handleIncomingCall(Map<String, dynamic> data) {
-    // Usamos el navigatorKey global para mostrar la pantalla de llamada
-    // sin importar en qué parte de la app esté el usuario.
-    navigatorKey.currentState?.push(
-      MaterialPageRoute(
-        builder: (context) => IncomingCallScreen(callData: data),
-        fullscreenDialog: true, // Para que aparezca como una superposición
-      ),
-    );
-  }
-
-  /// --- NUEVO: Lógica extraída para manejar solo notificaciones de chat ---
   void _handleChatMessage(Map<String, dynamic> data) async {
     final senderId = data['senderId'];
     final currentUserId = FirestoreService().auth.currentUser?.uid;
@@ -156,23 +143,17 @@ class NotificationService {
       final userDoc = await FirebaseFirestore.instance.collection('users').doc(senderId).get();
       if (userDoc.exists) {
         final userModel = UserModel.fromFirestore(userDoc);
-        
         final contactDoc = await FirebaseFirestore.instance.collection('users').doc(currentUserId).collection('contacts').doc(senderId).get();
         
-        // --- CORRECCIÓN APLICADA ---
-        // Se reescribe la lógica de forma explícita para mayor claridad.
         String? nickname;
         if (contactDoc.exists) {
-          // Si el documento de contacto existe, intentamos obtener el apodo.
           final contactData = contactDoc.data();
           if (contactData != null && contactData.containsKey('nickname')) {
             nickname = contactData['nickname'] as String?;
           }
         }
         
-        // Obtenemos el ID del chat para navegar correctamente
         final chatId = FirestoreService().getChatId(currentUserId, senderId);
-
         navigatorKey.currentState?.push(
           MaterialPageRoute(
             builder: (context) => ChatScreen(

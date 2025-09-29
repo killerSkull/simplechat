@@ -25,19 +25,22 @@ void main() async {
     persistenceEnabled: true,
   );
   
+  // 1. Creamos la instancia del servicio
   final notificationService = NotificationService();
-  await notificationService.initNotifications();
+  // 2. Ejecutamos la inicialización segura (sin UI)
+  await notificationService.init();
   
   runApp(
     MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => AudioPlayerProvider()),
+        // 3. Proveemos la instancia ya inicializada al resto de la app
         Provider<NotificationService>(create: (_) => notificationService),
         Provider<FirestoreService>(create: (_) => FirestoreService()),
-        // --- NUEVO: Se añade el StorageService para que esté disponible en toda la app ---
         Provider<StorageService>(create: (_) => StorageService()),
         ChangeNotifierProvider(create: (_) => ThemeProvider()),
       ],
+      // 4. Pasamos la navigatorKey a nuestro widget principal
       child: MyApp(navigatorKey: notificationService.navigatorKey),
     ),
   );
@@ -60,6 +63,11 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     
+    // --- LA SOLUCIÓN AL BUG ---
+    // 5. Una vez que este widget se construye, la UI está lista.
+    //    Ahora es seguro configurar el listener para notificaciones de app terminada.
+    context.read<NotificationService>().setupInteractedMessage();
+
     _authSubscription = FirebaseAuth.instance.authStateChanges().listen((user) {
       if (!mounted) return;
       setState(() {
@@ -104,7 +112,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     final themeProvider = context.watch<ThemeProvider>();
 
     return MaterialApp(
-      navigatorKey: widget.navigatorKey,
+      navigatorKey: widget.navigatorKey, // La navigatorKey se asigna aquí
       title: 'SimpleChat',
       theme: themeProvider.themeData,
       home: const AuthGate(),

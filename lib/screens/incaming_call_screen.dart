@@ -1,8 +1,8 @@
-
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:simplechat/screens/call_screen.dart';
 import 'package:simplechat/services/firestore_service.dart';
+import 'package:simplechat/services/notification_service.dart'; // Importante: Se añade este import
 
 class IncomingCallScreen extends StatelessWidget {
   final Map<String, dynamic> callData;
@@ -13,18 +13,22 @@ class IncomingCallScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final firestoreService = FirestoreService();
     
-    // --- LECTURA 100% SEGURA DE DATOS ---
-    // Usamos '??' para dar un valor por defecto si algo viene nulo.
-    // Esto evita el error que causa la pantalla gris.
-    final String callId = callData['callId'] ?? 'Usuario';
-    final String channelName = callData['channelName'] ?? callId; // Usamos callId como respaldo
+    // Lectura segura de datos
+    final String callId = callData['callId'] ?? '';
+    final String channelName = callData['channelName'] ?? callId;
     final String callerName = callData['callerName'] ?? 'Llamada Desconocida';
     final String callerPhotoUrl = callData['callerPhotoUrl'] ?? '';
     final bool isVideoCall = (callData['isVideoCall'] ?? 'false').toString().toLowerCase() == 'true';
     final String token = callData['token'] ?? '';
 
+    void cleanup() {
+      // --- LIMPIEZA DE MEMORIA ---
+      // Le decimos al servicio de notificaciones que esta llamada ya fue gestionada.
+      NotificationService.currentHandledCallId = null;
+    }
+
     return Scaffold(
-      backgroundColor: Colors.grey[900], // Fondo oscuro para la llamada
+      backgroundColor: Colors.grey[900],
       body: SafeArea(
         child: Center(
           child: Column(
@@ -59,30 +63,26 @@ class IncomingCallScreen extends StatelessWidget {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    // Botón para rechazar la llamada
                     FloatingActionButton(
                       heroTag: 'reject_call',
                       onPressed: () async {
-                        // --- CORRECCIÓN CRÍTICA ---
-                        // Usamos el 'callId' correcto para finalizar la llamada.
                         await firestoreService.endCall(callId, callerName);
+                        cleanup(); // Limpiamos la memoria
                         if (context.mounted) Navigator.of(context).pop();
                       },
                       backgroundColor: Colors.red,
                       child: const Icon(Icons.call_end, color: Colors.white),
                     ),
-                    // Botón para aceptar la llamada
                     FloatingActionButton(
                       heroTag: 'accept_call',
                       onPressed: () async {
                         await firestoreService.answerCall(callId);
+                        cleanup(); // Limpiamos la memoria
                         if (context.mounted) {
                           Navigator.pushReplacement(
                             context,
                             MaterialPageRoute(
                               builder: (context) => CallScreen(
-                                // --- CORRECCIÓN CRÍTICA ---
-                                // Pasamos el 'callId' a la siguiente pantalla.
                                 callId: callId,
                                 channelName: channelName,
                                 token: token,
