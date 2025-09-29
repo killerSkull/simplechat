@@ -118,23 +118,25 @@ class _CallScreenState extends State<CallScreen> {
   // --- La UI se mantiene prácticamente igual, pero ahora es más estable ---
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black,
-      body: Center(
-        child: Stack(
-          children: [
-            _buildRemoteVideo(),
-            if (_localUserJoined && !_isVideoDisabled)
-              Positioned(
-                top: 50,
-                right: 20,
-                child: _buildLocalVideo(),
-              ),
-            _buildCallControls(),
-            _buildTopInfo(),
-             if (!_localUserJoined)
-              const Center(child: CircularProgressIndicator()),
-          ],
+    return SafeArea(
+      child: Scaffold(
+        backgroundColor: Colors.black,
+        body: Center(
+          child: Stack(
+            children: [
+              _buildRemoteVideo(),
+              if (_localUserJoined && !_isVideoDisabled)
+                Positioned(
+                  top: 50,
+                  right: 20,
+                  child: _buildLocalVideo(),
+                ),
+              _buildCallControls(),
+              _buildTopInfo(),
+               if (!_localUserJoined)
+                const Center(child: CircularProgressIndicator()),
+            ],
+          ),
         ),
       ),
     );

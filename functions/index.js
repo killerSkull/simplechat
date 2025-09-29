@@ -15,99 +15,77 @@ const APP_CERTIFICATE = functions.config().agora.app_certificate;
 
 
 // --- FUNCIÓN 1: Para generar tokens de Agora (Mejorada) ---
-exports.generateAgoraToken = functions.https.onCall(async (data, context) => {
-  if (!context.auth) {
-    throw new functions.https.HttpsError("unauthenticated", "La función debe ser llamada por un usuario autenticado.");
-  }
-  const channelName = data.channelName;
-  if (!channelName) {
-    throw new functions.https.HttpsError("invalid-argument", "La función debe ser llamada con un argumento 'channelName'.");
-  }
+exports.onCallCreated = functions.firestore
+  .document("calls/{callId}")
+  .onCreate(async (snap, context) => {
+    const callData = snap.data();
+    const callId = context.params.callId;
 
-  // --- Comprobación de que las variables de entorno existen ---
-  if (!APP_ID || !APP_CERTIFICATE) {
-    throw new functions.https.HttpsError(
-        "failed-precondition",
-        "Las credenciales de Agora (APP_ID y APP_CERTIFICATE) no están configuradas en el entorno.",
+    // --- Verificación de seguridad ---
+    if (!callData || !APP_ID || !APP_CERTIFICATE) {
+      console.error("Faltan datos de llamada o configuración de Agora.");
+      return null;
+    }
+
+    // --- 1. Generar el Token de Agora ---
+    const channelName = callId;
+    const role = RtcRole.PUBLISHER;
+    const expirationTimeInSeconds = 3600; // 1 hora
+    const currentTimestamp = Math.floor(Date.now() / 1000);
+    const privilegeExpiredTs = currentTimestamp + expirationTimeInSeconds;
+
+    const token = RtcTokenBuilder.buildTokenWithUid(
+      APP_ID,
+      APP_CERTIFICATE,
+      channelName,
+      0,
+      role,
+      privilegeExpiredTs
     );
-  }
 
-  const role = RtcRole.PUBLISHER;
-  const expirationTimeInSeconds = 3600;
-  const currentTimestamp = Math.floor(Date.now() / 1000);
-  const privilegeExpiredTs = currentTimestamp + expirationTimeInSeconds;
+    // --- 2. Actualizar la llamada con el token ---
+    await snap.ref.update({ token: token });
 
-  try {
-    const token = RtcTokenBuilder.buildTokenWithUid(APP_ID, APP_CERTIFICATE, channelName, 0, role, privilegeExpiredTs);
-    return {token: token};
-  } catch (error) {
-    console.error("Error al generar el token de Agora:", error);
-    throw new functions.https.HttpsError("internal", "No se pudo generar el token de Agora.");
-  }
-});
+    // --- 3. Enviar Notificación ---
+    const receiverId = callData.receiver_id; // Nombre de campo unificado
+    const callerId = callData.caller_id;
+    const callerName = callData.caller_name || "Alguien";
 
+    const receiverDoc = await admin.firestore().collection("users").doc(receiverId).get();
+    if (!receiverDoc.exists) return null;
 
-// --- FUNCIÓN 2: Para notificar llamadas entrantes (Corregida y Unificada) ---
-exports.notifyIncomingCall = functions.firestore
-    .document("calls/{callId}")
-    .onCreate(async (snap, context) => {
-      const callData = snap.data();
-      if (!callData) return null;
+    const fcmToken = receiverDoc.data().fcm_token;
+    if (!fcmToken) return null;
 
-      // --- CORRECCIÓN 2: Se usan los nombres de campo correctos ---
-      const receiverId = callData.receiver_id;
-      const callerName = callData.caller_name || "Alguien";
+    const callerDoc = await admin.firestore().collection("users").doc(callerId).get();
+    const callerPhotoUrl = callerDoc.exists ? (callerDoc.data().photo_url || "") : "";
 
-      const calleeDoc = await admin.firestore().collection("users").doc(receiverId).get();
-      if (!calleeDoc.exists) {
-        console.log("No se encontró al usuario receptor:", receiverId);
-        return null;
-      }
+    const payload = {
+      token: fcmToken,
+      notification: {
+        title: "Llamada entrante",
+        body: `Tienes una llamada de ${callerName}`,
+      },
+      data: {
+        type: "incoming_call",
+        callId: callId,
+        channelName: channelName,
+        token: token,
+        callerName: callerName,
+        callerPhotoUrl: callerPhotoUrl,
+        isVideoCall: String(callData.is_video_call),
+      },
+      android: { priority: "high" },
+      apns: { payload: { aps: { sound: "default", "content-available": 1 } } },
+    };
 
-      const fcmToken = calleeDoc.data().fcm_token;
-      if (!fcmToken) {
-        console.log("El usuario receptor no tiene un FCM token.");
-        return null;
-      }
-
-      const payload = {
-        token: fcmToken,
-        notification: {
-          title: "Llamada entrante",
-          body: `Tienes una llamada de ${callerName}`,
-        },
-        data: {
-          // --- CORRECCIÓN 3: Se envían todos los datos necesarios a la app ---
-          type: "incoming_call",
-          caller_id: callData.caller_id,
-          caller_name: callerName,
-          receiver_id: receiverId,
-          is_video_call: String(callData.is_video_call),
-          channel_name: callData.channel_name,
-        },
-        android: {
-          priority: "high",
-        },
-        apns: {
-          payload: {
-            aps: {
-              sound: "default",
-              "content-available": 1,
-            },
-          },
-        },
-      };
-
-      try {
-        console.log(`Enviando notificación de llamada a ${receiverId}`);
-        await admin.messaging().send(payload);
-        console.log("Notificación enviada con éxito.");
-        return {success: true};
-      } catch (error) {
-        console.error("Error al enviar la notificación:", error);
-        return {error: error.message};
-      }
-    });
+    try {
+      await admin.messaging().send(payload);
+      console.log("Notificación enviada con éxito.");
+    } catch (error) {
+      console.error("Error al enviar la notificación:", error);
+    }
+  });
 
 
 // --- FUNCIÓN 3: Para notificar mensajes de chat (Sin cambios) ---

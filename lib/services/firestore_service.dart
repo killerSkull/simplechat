@@ -2,79 +2,14 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 import 'package:simplechat/models/user_model.dart';
-import 'package:simplechat/services/agora_service.dart';
 import 'package:simplechat/services/storage_service.dart';
 
 class FirestoreService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
   final FirebaseAuth auth = FirebaseAuth.instance;
-  var db;
-  // --- NUEVO: Métodos para gestionar llamadas ---
 
-  /// Obtiene un stream para escuchar los cambios en un documento de llamada.
-  Stream<DocumentSnapshot> getCallStream(String chatId) {
-    return _db.collection('calls').doc(chatId).snapshots();
-  }
-
-  /// Inicia una llamada creando un documento en Firestore.
-  /// Esto activará la Cloud Function que envía la notificación.
-  Future<void> startCall({
-    required String chatId,
-    required String recipientId,
-    required bool isVideoCall,
-  }) async {
-    final user = auth.currentUser;
-    if (user == null) return;
-
-    // 1. Obtiene el token de Agora necesario para unirse al canal.
-    final token = await AgoraService.fetchToken(chatId);
-    if (token == null) {
-      print("No se pudo obtener el token de Agora. Cancelando llamada.");
-      return;
-    }
-
-    // 2. Crea el documento de la llamada en la colección 'calls'.
-    await _db.collection('calls').doc(chatId).set({
-      'callerId': user.uid,
-      'callerName': user.displayName ?? 'Alguien',
-      'callerPhotoUrl': user.photoURL ?? '',
-      'recipientId': recipientId,
-      'token': token,
-      'isVideoCall': isVideoCall,
-      'status': 'ringing', // Estados: ringing, ongoing, ended, missed, rejected
-      'createdAt': FieldValue.serverTimestamp(),
-    });
-  }
-
-  /// Actualiza el estado de la llamada a 'ongoing' cuando el receptor contesta.
-  Future<void> answerCall(String chatId) async {
-    await _db.collection('calls').doc(chatId).update({'status': 'ongoing'});
-  }
-
-  /// Finaliza una llamada, actualizando su estado final.
-  Future<void> endCall(String chatId, String currentUserId) async {
-    final callDoc = await _db.collection('calls').doc(chatId).get();
-    if (!callDoc.exists) return;
-
-    final callData = callDoc.data()!;
-    final recipientId = callData['recipientId'];
-    final status = callData['status'];
-
-    String finalStatus = 'ended';
-
-    // Determina si la llamada fue rechazada o perdida en lugar de solo terminada.
-    if (status == 'ringing' && currentUserId == recipientId) {
-      finalStatus = 'rejected';
-    } else if (status == 'ringing') {
-      finalStatus = 'missed';
-    }
-
-    await _db.collection('calls').doc(chatId).update({'status': finalStatus});
-  }
-
-
-  // --- (El resto de los métodos se mantienen igual) ---
-
+  // --- MÉTODO QUE FALTABA (RESTAURADO) ---
+  /// Actualiza el campo 'current_chat_id' del usuario para saber si está en un chat.
   Future<void> updateUserActiveChat(String? chatId) async {
     final user = auth.currentUser;
     if (user == null) return;
@@ -83,14 +18,77 @@ class FirestoreService {
       'current_chat_id': chatId,
     }, SetOptions(merge: true));
   }
-    Future<void> saveUserToken(String token) async {
+  
+  // --- LÓGICA DE LLAMADAS (CORREGIDA Y UNIFICADA) ---
+  Future<String?> startCall({
+    required String recipientId,
+    required bool isVideoCall,
+  }) async {
+    final currentUser = auth.currentUser;
+    if (currentUser == null) return null;
+
+    try {
+      final userDoc = await _db.collection('users').doc(currentUser.uid).get();
+      final currentUserName = (userDoc.data() as Map<String, dynamic>)['display_name'] ?? 'Alguien';
+
+      final callDocRef = _db.collection('calls').doc();
+      await callDocRef.set({
+        'caller_id': currentUser.uid,
+        'caller_name': currentUserName,
+        'receiver_id': recipientId,
+        'is_video_call': isVideoCall,
+        'status': 'ringing',
+        'created_at': FieldValue.serverTimestamp(),
+      });
+      return callDocRef.id;
+    } catch (e) {
+      print("Error al iniciar llamada en Firestore: $e");
+      return null;
+    }
+  }
+
+  Stream<DocumentSnapshot> getCallStream(String callId) {
+    if (callId.isEmpty) return const Stream.empty();
+    return _db.collection('calls').doc(callId).snapshots();
+  }
+
+  Future<void> answerCall(String callId) async {
+    await _db.collection('calls').doc(callId).update({'status': 'ongoing'});
+  }
+
+  Future<void> endCall(String callId, String currentUserId) async {
+    if (callId.isEmpty) return;
+    try {
+      await _db.collection('calls').doc(callId).delete();
+    } catch (e) {
+      print("Error al finalizar la llamada (puede que ya no exista): $e");
+    }
+  }
+  
+  // --- (El resto de tus métodos de Firestore permanecen aquí sin cambios) ---
+  
+  String getChatId(String user1, String user2) {
+    return user1.hashCode <= user2.hashCode ? '$user1-$user2' : '$user2-$user1';
+  }
+
+  Stream<QuerySnapshot> getChatsStream() {
+    final user = auth.currentUser;
+    if (user == null) return const Stream.empty();
+    return _db
+        .collection('chats')
+        .where('visible_for', arrayContains: user.uid)
+        .orderBy('last_message_timestamp', descending: true)
+        .snapshots();
+  }
+  
+  Future<void> saveUserToken(String token) async {
     final user = auth.currentUser;
     if (user == null) return;
-
     await _db.collection('users').doc(user.uid).set({
       'fcm_token': token,
     }, SetOptions(merge: true));
   }
+  
     Future<void> createUserProfile(User user) async {
     await _db.collection('users').doc(user.uid).set({
       'uid': user.uid,
@@ -217,20 +215,6 @@ class FirestoreService {
       final userDocs = await _db.collection('users').where(FieldPath.documentId, whereIn: contactUids).get();
       return userDocs.docs.map((doc) => UserModel.fromFirestore(doc)).toList();
     });
-  }
-
-  Stream<QuerySnapshot> getChatsStream() {
-    final user = auth.currentUser;
-    if (user == null) return const Stream.empty();
-    return _db
-        .collection('chats')
-        .where('visible_for', arrayContains: user.uid)
-        .orderBy('last_message_timestamp', descending: true)
-        .snapshots();
-  }
-  
-  String getChatId(String user1, String user2) {
-    return user1.hashCode <= user2.hashCode ? '$user1-$user2' : '$user2-$user1';
   }
 
   Stream<DocumentSnapshot> getChatStream(String chatId) {

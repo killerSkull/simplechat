@@ -1,15 +1,17 @@
+
 import 'dart:async';
 import 'dart:io';
-import 'package:permission_handler/permission_handler.dart';
-import 'package:simplechat/screens/call_screen.dart';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_sound/flutter_sound.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:simplechat/models/uploading_message_model.dart';
 import 'package:simplechat/models/user_model.dart';
+import 'package:simplechat/screens/call_screen.dart';
 import 'package:simplechat/screens/chat/components/attachment_menu.dart';
 import 'package:simplechat/screens/chat/components/selection_app_bar.dart';
 import 'package:simplechat/screens/chat/logic/chat_state_manager.dart';
@@ -23,9 +25,8 @@ import 'package:uuid/uuid.dart';
 class ChatScreen extends StatefulWidget {
   final UserModel otherUser;
   final String? nickname;
-  final String chatId;
 
-  const ChatScreen({super.key, required this.otherUser, this.nickname, required this.chatId,});
+  const ChatScreen({super.key, required this.otherUser, this.nickname, required String chatId});
 
   @override
   State<ChatScreen> createState() => _ChatScreenState();
@@ -49,6 +50,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   Duration _recordingDuration = Duration.zero;
   StreamSubscription? _recorderSubscription;
   Timestamp? _currentClearedAtTimestamp;
+  late final String _chatId;
 
   @override
   void initState() {
@@ -56,27 +58,25 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     _firestoreService = context.read<FirestoreService>();
     _storageService = context.read<StorageService>();
     final currentUser = _firestoreService.auth.currentUser!;
-
-    _messagesQuery = _firestoreService.getMessagesQuery(widget.chatId);
+    
+    _chatId = _firestoreService.getChatId(currentUser.uid, widget.otherUser.uid);
+    _messagesQuery = _firestoreService.getMessagesQuery(_chatId);
 
     _chatManager = ChatStateManager(
       context: context,
       firestoreService: _firestoreService,
       storageService: _storageService,
-      chatId: widget.chatId,
+      chatId: _chatId,
       currentUserId: currentUser.uid,
       otherUserId: widget.otherUser.uid,
     );
 
     _chatManager.addListener(() => setState(() {}));
-
     WidgetsBinding.instance.addObserver(this);
-    _firestoreService.updateUserActiveChat(widget.chatId);
-
-    _listenForChatUpdates(widget.chatId, currentUser.uid);
+    _firestoreService.updateUserActiveChat(_chatId);
+    _listenForChatUpdates(_chatId, currentUser.uid);
     _checkIfContact();
-    _firestoreService.markMessagesAsRead(
-        chatId: widget.chatId, currentUserId: currentUser.uid);
+    _firestoreService.markMessagesAsRead(chatId: _chatId, currentUserId: currentUser.uid);
     _searchController.addListener(() => setState(() {}));
 
     _recorder.openRecorder().then((value) {
@@ -102,7 +102,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     _recorderSubscription?.cancel();
     _recorder.closeRecorder();
     _firestoreService.updateTypingStatus(
-        chatId: _chatManager.chatId,
+        chatId: _chatId,
         currentUserId: _chatManager.currentUserId,
         isTyping: false);
     super.dispose();
@@ -111,7 +111,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      _firestoreService.updateUserActiveChat(_chatManager.chatId);
+      _firestoreService.updateUserActiveChat(_chatId);
     } else if (state == AppLifecycleState.paused) {
       _firestoreService.updateUserActiveChat(null);
     }
@@ -152,18 +152,18 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     _typingTimer?.cancel();
     if (text.isNotEmpty) {
       _firestoreService.updateTypingStatus(
-          chatId: _chatManager.chatId,
+          chatId: _chatId,
           currentUserId: _chatManager.currentUserId,
           isTyping: true);
       _typingTimer = Timer(const Duration(seconds: 2), () {
         _firestoreService.updateTypingStatus(
-            chatId: _chatManager.chatId,
+            chatId: _chatId,
             currentUserId: _chatManager.currentUserId,
             isTyping: false);
       });
     } else {
       _firestoreService.updateTypingStatus(
-          chatId: _chatManager.chatId,
+          chatId: _chatId,
           currentUserId: _chatManager.currentUserId,
           isTyping: false);
     }
@@ -178,12 +178,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       return;
     }
     if (!_isRecorderInitialized) return;
-
     final tempDir = await getTemporaryDirectory();
     final path = '${tempDir.path}/${const Uuid().v4()}.aac';
-
     await _recorder.startRecorder(toFile: path, codec: Codec.aacADTS);
-
     setState(() {
       _isRecording = true;
       _recordingDuration = Duration.zero;
@@ -192,11 +189,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
   Future<void> _stopRecording() async {
     if (!_isRecorderInitialized || !_isRecording) return;
-
     final path = await _recorder.stopRecorder();
-
     setState(() => _isRecording = false);
-
     if (path != null) {
       final file = File(path);
       final message = UploadingMessage(
@@ -206,7 +200,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         type: MessageType.audio,
       );
       final uploadTask = _storageService.uploadChatAudio(
-          chatId: _chatManager.chatId, filePath: path);
+          chatId: _chatId, filePath: path);
       _chatManager.handleFileUpload(uploadTask, message,
           audioDuration: _recordingDuration.inMilliseconds);
     }
@@ -228,8 +222,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
             TextButton(
               child: const Text('Vaciar'),
               onPressed: () async {
-                await _firestoreService.clearChatForUser(
-                    chatId: _chatManager.chatId);
+                await _firestoreService.clearChatForUser(chatId: _chatId);
                 if (mounted) Navigator.of(context).pop();
               },
             ),
@@ -240,13 +233,13 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _exportChat() async {
-    final currentUserDoc = await _firestoreService.db
+    final currentUserDoc = await FirebaseFirestore.instance
         .collection('users')
         .doc(_chatManager.currentUserId)
         .get();
     final currentUserModel = UserModel.fromFirestore(currentUserDoc);
     final chatHistory = await _firestoreService.exportChatHistory(
-      chatId: _chatManager.chatId,
+      chatId: _chatId,
       currentUser: currentUserModel,
       otherUser: widget.otherUser,
     );
@@ -279,51 +272,64 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     }
   }
   
-  /// --- LÓGICA DE LLAMADA ACTUALIZADA ---
+  /// --- LÓGICA DE LLAMADA CORREGIDA ---
   Future<void> _startCall(bool isVideoCall) async {
-    // 1. Pedir permisos
-    final cameraStatus = await Permission.camera.request();
-    final micStatus = await Permission.microphone.request();
+    await [Permission.camera, Permission.microphone].request();
 
-    if (cameraStatus.isGranted && micStatus.isGranted) {
-      final channelName = widget.chatId;
+    // 1. Iniciar la llamada en Firestore.
+    final String? callId = await _firestoreService.startCall(
+      recipientId: widget.otherUser.uid,
+      isVideoCall: isVideoCall,
+    );
 
-      // 2. Iniciar la llamada en Firestore. Esto creará el documento y
-      //    activará la función en la nube para enviar la notificación.
-      await _firestoreService.startCall(
-        chatId: channelName,
-        recipientId: widget.otherUser.uid,
-        isVideoCall: isVideoCall,
-      );
-
-      // 3. Escuchar el documento de la llamada para obtener el token.
-      final callStream = _firestoreService.getCallStream(channelName);
-      final callDoc = await callStream.firstWhere((doc) =>
-          doc.exists && (doc.data() as Map<String, dynamic>).containsKey('token'));
-      
-      final callData = callDoc.data() as Map<String, dynamic>;
-      
-      // 4. Navegar a la pantalla de llamada con los datos correctos.
-      if (mounted) {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => CallScreen(
-              channelName: channelName,
-              token: callData['token'],
-              otherUserName: widget.nickname ?? widget.otherUser.displayName ?? 'Usuario',
-              isVideoCall: isVideoCall, callId: '',
-            ),
-          ),
-        );
-      }
-    } else {
+    // 2. Comprobación de seguridad para evitar el error de ruta vacía.
+    if (callId == null || callId.isEmpty) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Se necesitan permisos de cámara y micrófono.')),
+          const SnackBar(content: Text('Error al iniciar la llamada.')),
         );
       }
+      return;
     }
+
+    // 3. Escuchar el documento de la llamada y esperar el token.
+    StreamSubscription? callSubscription;
+    callSubscription = _firestoreService.getCallStream(callId).listen(
+      (doc) async {
+        if (!mounted) {
+          await callSubscription?.cancel();
+          return;
+        }
+
+        if (doc.exists) {
+          final data = doc.data() as Map<String, dynamic>;
+          if (data.containsKey('token')) {
+            await callSubscription?.cancel(); // Dejamos de escuchar
+            
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => CallScreen(
+                  callId: callId,
+                  channelName: callId,
+                  token: data['token'],
+                  otherUserName: widget.nickname ?? widget.otherUser.displayName ?? 'Usuario',
+                  isVideoCall: isVideoCall,
+                ),
+              ),
+            );
+          } else if (data['status'] == 'rejected') {
+             await callSubscription?.cancel();
+             ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Llamada rechazada.')),
+             );
+          }
+        } else {
+          // Si el doc se borra antes de tener token (la otra persona rechazó muy rápido)
+          await callSubscription?.cancel();
+        }
+      },
+    );
   }
 
   @override
@@ -341,7 +347,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
               onStartVoiceCall: () => _startCall(false),
               otherUser: widget.otherUser,
               nickname: widget.nickname,
-              chatId: _chatManager.chatId,
+              chatId: _chatId,
               isSearching: _isSearching,
               onToggleSearch: (isSearching) => setState(() {
                 _isSearching = isSearching;
@@ -384,7 +390,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                     _messageController.clear();
                     _typingTimer?.cancel();
                     _firestoreService.updateTypingStatus(
-                        chatId: _chatManager.chatId,
+                        chatId: _chatId,
                         currentUserId: _chatManager.currentUserId,
                         isTyping: false);
                   }
