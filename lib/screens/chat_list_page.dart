@@ -229,14 +229,18 @@ class _ChatListPageState extends State<ChatListPage> {
                     final user = userMap[partnerUid];
                     if (user == null) return const SizedBox.shrink();
 
+                    // --- INICIO DE LA IMPLEMENTACIÓN DE TICKS ---
                     final lastMessage = chatDocData['last_message_text'] as String? ?? '';
                     final timestamp = (chatDocData['last_message_timestamp'] as Timestamp?)?.toDate();
                     final nickname = contactsMap[user.uid];
+                    final lastMessageSender = chatDocData['last_message_sender_uid'] as String?;
+                    final lastMessageStatus = chatDocData['last_message_status'] as String?;
+                    final isSentByMe = lastMessageSender == _currentUser!.uid;
+                    // --- FIN DE LA IMPLEMENTACIÓN DE TICKS ---
                     
                     return ListTile(
                       onLongPress: () => _showChatOptionsDialog(context, user, nickname, chatDoc.id),
                       leading: GestureDetector(
-                        // --- CORRECCIÓN: Pasamos el ID del chat real al preview ---
                         onTap: () => showProfilePreview(context, user, nickname, chatDoc.id),
                         child: Stack(
                           clipBehavior: Clip.none,
@@ -268,10 +272,21 @@ class _ChatListPageState extends State<ChatListPage> {
                         ),
                       ),
                       title: Text(nickname ?? user.displayName ?? 'Usuario', style: const TextStyle(fontWeight: FontWeight.bold)),
-                      subtitle: Text(
-                        lastMessage,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                      // --- SUBTÍTULO MODIFICADO PARA INCLUIR TICKS ---
+                      subtitle: Row(
+                        children: [
+                          if (isSentByMe) ...[
+                            _buildStatusIcon(lastMessageStatus),
+                            const SizedBox(width: 4),
+                          ],
+                          Expanded(
+                            child: Text(
+                              lastMessage,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
                       ),
                       trailing: timestamp != null
                           ? Text(
@@ -280,9 +295,6 @@ class _ChatListPageState extends State<ChatListPage> {
                             )
                           : const SizedBox.shrink(),
                       onTap: () {
-                        // --- CORRECCIÓN CRÍTICA ---
-                        // Antes aquí pasabas un 'chatId' de texto. Ahora usas el ID real del documento del chat.
-                        // Esto es fundamental para que se carguen los mensajes correctos.
                         Navigator.push(
                           context,
                           MaterialPageRoute(
@@ -303,5 +315,27 @@ class _ChatListPageState extends State<ChatListPage> {
         );
       },
     );
+  }
+  
+  // --- WIDGET HELPER PARA LOS TICKS ---
+  Widget _buildStatusIcon(String? status) {
+    IconData iconData;
+    Color? color;
+    switch (status) {
+        case 'sent':
+          iconData = Icons.done;
+          break;
+        case 'delivered':
+          iconData = Icons.done_all;
+          break;
+        case 'read':
+          iconData = Icons.done_all;
+          color = Colors.lightBlueAccent;
+          break;
+        // No mostramos nada para 'sending' o si el estado es nulo
+        default:
+          return const SizedBox.shrink();
+    }
+    return Icon(iconData, size: 18, color: color ?? Colors.grey);
   }
 }

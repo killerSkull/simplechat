@@ -25,30 +25,37 @@ void main() async {
     persistenceEnabled: true,
   );
   
-  // 1. Creamos la instancia del servicio
   final notificationService = NotificationService();
-  // 2. Ejecutamos la inicialización segura (sin UI)
-  await notificationService.init();
+  final themeProvider = ThemeProvider();
+  
+  // Se espera a que el tema esté cargado antes de arrancar la app
+  await themeProvider.loadPreferences();
   
   runApp(
     MultiProvider(
       providers: [
+        // --- CORRECCIÓN CRÍTICA ---
+        // Se crea el GlobalKey aquí para que esté disponible en toda la app
+        Provider<GlobalKey<NavigatorState>>(create: (_) => GlobalKey<NavigatorState>()),
+        
+        // --- CORRECCIÓN DEL ERROR ---
+        // Se usa el constructor correcto para crear un nuevo AudioPlayerProvider
         ChangeNotifierProvider(create: (_) => AudioPlayerProvider()),
-        // 3. Proveemos la instancia ya inicializada al resto de la app
-        Provider<NotificationService>(create: (_) => notificationService),
-        Provider<FirestoreService>(create: (_) => FirestoreService()),
-        Provider<StorageService>(create: (_) => StorageService()),
-        ChangeNotifierProvider(create: (_) => ThemeProvider()),
+        
+        // Se proveen las instancias ya creadas de los servicios
+        Provider.value(value: notificationService),
+        Provider(create: (_) => FirestoreService()),
+        Provider(create: (_) => StorageService()),
+        ChangeNotifierProvider.value(value: themeProvider),
       ],
-      // 4. Pasamos la navigatorKey a nuestro widget principal
-      child: MyApp(navigatorKey: notificationService.navigatorKey),
+      child: MyApp(notificationService: notificationService),
     ),
   );
 }
 
 class MyApp extends StatefulWidget {
-  final GlobalKey<NavigatorState> navigatorKey;
-  const MyApp({super.key, required this.navigatorKey});
+  final NotificationService notificationService;
+  const MyApp({super.key, required this.notificationService});
 
   @override
   State<MyApp> createState() => _MyAppState();
@@ -62,12 +69,13 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    
-    // --- LA SOLUCIÓN AL BUG ---
-    // 5. Una vez que este widget se construye, la UI está lista.
-    //    Ahora es seguro configurar el listener para notificaciones de app terminada.
-    context.read<NotificationService>().setupInteractedMessage();
 
+    // Se inicializa el servicio de notificaciones después de que la UI esté lista,
+    // pasándole el GlobalKey que ahora sí está disponible en el context.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      widget.notificationService.init(navigatorKey: context.read<GlobalKey<NavigatorState>>());
+    });
+    
     _authSubscription = FirebaseAuth.instance.authStateChanges().listen((user) {
       if (!mounted) return;
       setState(() {
@@ -100,9 +108,8 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       case AppLifecycleState.inactive:
       case AppLifecycleState.paused:
       case AppLifecycleState.detached:
-        firestoreService.updateUserPresence(isOnline: false);
-        break;
       case AppLifecycleState.hidden:
+        firestoreService.updateUserPresence(isOnline: false);
         break;
     }
   }
@@ -112,7 +119,8 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     final themeProvider = context.watch<ThemeProvider>();
 
     return MaterialApp(
-      navigatorKey: widget.navigatorKey, // La navigatorKey se asigna aquí
+      // Se asigna el GlobalKey al MaterialApp para que controle la navegación
+      navigatorKey: context.read<GlobalKey<NavigatorState>>(),
       title: 'SimpleChat',
       theme: themeProvider.themeData,
       home: const AuthGate(),

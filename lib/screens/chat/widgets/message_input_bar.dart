@@ -1,14 +1,14 @@
 import 'package:emoji_picker_flutter/emoji_picker_flutter.dart';
 import 'package:flutter/material.dart';
 
-// --- CAMBIO: Convertido a StatefulWidget para gestionar el estado del botón ---
 class MessageInputBar extends StatefulWidget {
   final TextEditingController messageController;
   final bool isContact;
   final bool isEmojiPickerVisible;
   final bool isRecording;
   final bool isRecorderInitialized;
-  final Duration recordingDuration;
+  // --- BUG 1 FIX: Receive a ValueNotifier instead of a static Duration ---
+  final ValueNotifier<Duration> recordingDurationNotifier;
   final VoidCallback onAddContact;
   final VoidCallback onSendMessage;
   final VoidCallback onSendMedia;
@@ -25,7 +25,7 @@ class MessageInputBar extends StatefulWidget {
     required this.isEmojiPickerVisible,
     required this.isRecording,
     required this.isRecorderInitialized,
-    required this.recordingDuration,
+    required this.recordingDurationNotifier,
     required this.onAddContact,
     required this.onSendMessage,
     required this.onSendMedia,
@@ -41,26 +41,30 @@ class MessageInputBar extends StatefulWidget {
 }
 
 class _MessageInputBarState extends State<MessageInputBar> {
-  // Este booleano controlará qué botón se muestra.
   bool _showSendButton = false;
 
   @override
   void initState() {
     super.initState();
-    // Añadimos un "escucha" al controlador de texto.
-    // Se activará con CUALQUIER cambio (tecleo, emojis, etc.).
     widget.messageController.addListener(_updateButtonState);
-    _updateButtonState(); // Comprobamos el estado inicial.
+    _updateButtonState();
+  }
+
+  @override
+  void didUpdateWidget(covariant MessageInputBar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.messageController != oldWidget.messageController) {
+      oldWidget.messageController.removeListener(_updateButtonState);
+      widget.messageController.addListener(_updateButtonState);
+    }
   }
 
   @override
   void dispose() {
-    // Es importante quitar el "escucha" para evitar fugas de memoria.
     widget.messageController.removeListener(_updateButtonState);
     super.dispose();
   }
   
-  // Esta función se encarga de actualizar el estado del botón.
   void _updateButtonState() {
     if (mounted) {
       final hasText = widget.messageController.text.isNotEmpty;
@@ -81,16 +85,12 @@ class _MessageInputBarState extends State<MessageInputBar> {
 
   @override
   Widget build(BuildContext context) {
-    // --- AHORA USA EL ESTADO INTERNO _showSendButton ---
     final hasText = _showSendButton;
     final theme = Theme.of(context);
 
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        if (!widget.isContact)
-          Container(
-            color: theme.colorScheme.surfaceContainerHighest,
+    if (!widget.isContact) {
+       return Container(
+            color: theme.colorScheme.surfaceVariant,
             padding: const EdgeInsets.all(12.0),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -106,10 +106,15 @@ class _MessageInputBarState extends State<MessageInputBar> {
                 ),
               ],
             ),
-          )
-        else
+          );
+    }
+      
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 6.0),
+            color: theme.scaffoldBackgroundColor,
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
@@ -128,35 +133,48 @@ class _MessageInputBarState extends State<MessageInputBar> {
                           color: theme.iconTheme.color?.withOpacity(0.7),
                         ),
                         Expanded(
-                          child: widget.isRecording
-                            ? Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  const Text(" Grabando...", style: TextStyle(color: Colors.red)),
-                                  Text(_formatDuration(widget.recordingDuration), style: const TextStyle(color: Colors.red)),
-                                ],
-                              )
-                            : TextField(
-                                controller: widget.messageController,
-                                onChanged: widget.onTextChanged,
-                                onTap: () {
-                                  if (widget.isEmojiPickerVisible) widget.toggleEmojiPicker();
-                                },
-                                maxLines: 5,
-                                minLines: 1,
-                                decoration: InputDecoration(
-                                  hintText: 'Mensaje',
-                                  border: InputBorder.none,
-                                  contentPadding: const EdgeInsets.symmetric(vertical: 10.0),
-                                ),
+                          // --- BUG 1 FIX: Use ValueListenableBuilder ---
+                          // This widget listens to the notifier and only rebuilds the timer text.
+                          child: ValueListenableBuilder<Duration>(
+                            valueListenable: widget.recordingDurationNotifier,
+                            builder: (context, duration, child) {
+                              if (widget.isRecording) {
+                                return Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      const Text(" Grabando...", style: TextStyle(color: Colors.red)),
+                                      Padding(
+                                        padding: const EdgeInsets.only(right: 8.0),
+                                        child: Text(_formatDuration(duration), style: const TextStyle(color: Colors.red)),
+                                      ),
+                                    ],
+                                  );
+                              }
+                              // If not recording, return the original text field
+                              return child!;
+                            },
+                            child: TextField(
+                              controller: widget.messageController,
+                              onChanged: widget.onTextChanged,
+                              onTap: () {
+                                if (widget.isEmojiPickerVisible) widget.toggleEmojiPicker();
+                              },
+                              maxLines: 5,
+                              minLines: 1,
+                              decoration: const InputDecoration(
+                                hintText: 'Mensaje',
+                                border: InputBorder.none,
+                                contentPadding: EdgeInsets.symmetric(vertical: 10.0),
                               ),
+                            ),
+                          ),
                         ),
                         IconButton(
                           icon: const Icon(Icons.attach_file),
                           onPressed: widget.onSendMedia,
                           color: theme.iconTheme.color?.withOpacity(0.7),
                         ),
-                        if (!hasText)
+                        if (!hasText && !widget.isRecording)
                           IconButton(
                             icon: const Icon(Icons.camera_alt),
                             onPressed: widget.onOpenCamera,
@@ -186,7 +204,7 @@ class _MessageInputBarState extends State<MessageInputBar> {
                           onLongPress: widget.onStartRecording,
                           onLongPressEnd: (details) => widget.onStopRecording(),
                           child: Icon(
-                            widget.isRecording ? Icons.mic_off : Icons.mic,
+                            widget.isRecording ? Icons.stop : Icons.mic,
                             color: Colors.white,
                           ),
                         ),
@@ -202,7 +220,7 @@ class _MessageInputBarState extends State<MessageInputBar> {
               textEditingController: widget.messageController,
               onBackspacePressed: () {
                 widget.messageController
-                  ..text = widget.messageController.text.characters.skipLast(0).toString()
+                  ..text = widget.messageController.text.characters.skipLast(1).toString()
                   ..selection = TextSelection.fromPosition(
                       TextPosition(offset: widget.messageController.text.length));
               },

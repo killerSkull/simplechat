@@ -8,7 +8,6 @@ import 'package:simplechat/services/storage_service.dart';
 import '../services/firestore_service.dart';
 
 class ProfileScreen extends StatefulWidget {
-  // --- CAMBIO: El widget ahora espera recibir el userId ---
   final String userId;
   const ProfileScreen({super.key, required this.userId});
 
@@ -43,28 +42,36 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (_isPickingImage) return;
     setState(() => _isPickingImage = true);
 
-    final picker = ImagePicker();
-    final pickedFile = await picker.pickImage(source: ImageSource.gallery);
+    try {
+      final picker = ImagePicker();
+      final pickedFile = await picker.pickImage(source: ImageSource.gallery, imageQuality: 70);
 
-    if (pickedFile != null) {
-      setState(() => _imageFile = File(pickedFile.path));
-    }
-    
-    if (mounted) {
-       setState(() => _isPickingImage = false);
+      if (pickedFile != null) {
+        setState(() => _imageFile = File(pickedFile.path));
+      }
+    } finally {
+       if (mounted) {
+         setState(() => _isPickingImage = false);
+      }
     }
   }
 
   Future<void> _saveProfile() async {
-    if (_formKey.currentState!.validate() && !_isSaving) {
-      setState(() => _isSaving = true);
-      
-      String? photoUrl;
+    if (!_formKey.currentState!.validate() || _isSaving) return;
+    
+    setState(() => _isSaving = true);
+    
+    String? finalPhotoUrl;
+
+    try {
+      // --- BUG 4 FIX: Correctly await the upload and get the URL ---
       if (_imageFile != null) {
-        photoUrl = (await _storageService.uploadProfileImage(
+        final uploadTask = _storageService.uploadProfileImage(
           userId: widget.userId,
           file: _imageFile!,
-        )) as String?;
+        );
+        final snapshot = await uploadTask.whenComplete(() {});
+        finalPhotoUrl = await snapshot.ref.getDownloadURL();
       }
       
       String? fullPhoneNumber;
@@ -77,14 +84,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
         displayName: _nameController.text.trim(),
         status: _statusController.text.trim(),
         phoneNumber: fullPhoneNumber,
-        photoUrl: photoUrl,
+        // Use the new URL if it exists, otherwise don't change it
+        photoUrl: finalPhotoUrl, 
       );
       
       if (mounted) {
-        setState(() => _isSaving = false);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Perfil actualizado con éxito.')),
         );
+      }
+    } catch (e) {
+      if(mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error al guardar: $e')),
+        );
+      }
+    } finally {
+       if (mounted) {
+        setState(() => _isSaving = false);
       }
     }
   }
@@ -107,7 +124,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ],
       ),
       body: SafeArea(
-        // --- CAMBIO: El StreamBuilder ahora usa widget.userId ---
         child: StreamBuilder<DocumentSnapshot>(
           stream: FirebaseFirestore.instance.collection('users').doc(widget.userId).snapshots(),
           builder: (context, snapshot) {
@@ -119,9 +135,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
             }
             
             final user = UserModel.fromFirestore(snapshot.data!);
-            _nameController.text = user.displayName ?? '';
-            _statusController.text = user.status ?? '';
-            // No pre-llenamos el teléfono para que el usuario pueda cambiarlo si quiere.
+            
+            // Populate controllers only if they are empty to avoid overriding user input
+            if(_nameController.text.isEmpty) _nameController.text = user.displayName ?? '';
+            if(_statusController.text.isEmpty) _statusController.text = user.status ?? '';
             
             return Center(
               child: SingleChildScrollView(

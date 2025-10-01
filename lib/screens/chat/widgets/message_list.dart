@@ -7,13 +7,13 @@ import 'message_bubble.dart';
 
 class MessageList extends StatelessWidget {
   final Query? messagesQuery;
-  // --- CAMBIO: Ahora recibe `uploadingMessages` en lugar de `pendingMessages` ---
   final List<UploadingMessage> uploadingMessages;
   final bool isSearching;
   final String searchQuery;
   final Function(DocumentSnapshot, LongPressStartDetails) onLongPressMessage;
   final List<String> selectedMessages;
   final Function(String, String) onAddContact;
+  final String chatId;
 
   const MessageList({
     super.key,
@@ -24,22 +24,26 @@ class MessageList extends StatelessWidget {
     required this.onLongPressMessage,
     required this.selectedMessages,
     required this.onAddContact,
+    required this.chatId,
   });
 
   @override
   Widget build(BuildContext context) {
     final currentUserId = FirebaseAuth.instance.currentUser!.uid;
 
-    if (messagesQuery == null && uploadingMessages.isEmpty) {
-      return const Center(child: CircularProgressIndicator());
+    if (messagesQuery == null) {
+      // If there's no query, just build with uploading messages if any
+      if (uploadingMessages.isEmpty) {
+        return const Center(child: Text('Inicia una conversación.'));
+      }
+      return _buildList([], uploadingMessages, currentUserId, onLongPressMessage);
     }
 
     return StreamBuilder<QuerySnapshot>(
       stream: messagesQuery?.snapshots(),
       builder: (context, messagesSnapshot) {
-        if (messagesSnapshot.connectionState == ConnectionState.waiting && uploadingMessages.isEmpty) {
-          return const Center(child: CircularProgressIndicator());
-        }
+        // --- BUG 2 FIX: Removed the ConnectionState.waiting check ---
+        // We now build the list immediately, even if it's empty, to avoid the spinner.
         
         final messages = messagesSnapshot.data?.docs ?? [];
         
@@ -61,33 +65,43 @@ class MessageList extends StatelessWidget {
            return const Center(child: Text('Envía un mensaje para empezar.'));
         }
 
-        // --- LÓGICA MEJORADA: Combina mensajes subidos y mensajes en la nube ---
-        return ListView.builder(
-          reverse: true,
-          itemCount: filteredMessages.length + uploadingMessages.length,
-          itemBuilder: (context, index) {
-            // Muestra primero los mensajes que se están subiendo
-            if (index < uploadingMessages.length) {
-              final uploadingItem = uploadingMessages[index];
-              return MessageBubble(
-                uploadingMessage: uploadingItem,
-                isSelected: false,
-                onLongPress: (_) {},
-                onAddContact: (_, __) {},
-              );
-            }
-            // Luego, muestra los mensajes ya enviados
-            final doc = filteredMessages[index - uploadingMessages.length];
-            final messageId = doc.id;
-            final isSelected = selectedMessages.contains(messageId);
-            
-            return MessageBubble(
-              doc: doc,
-              isSelected: isSelected,
-              onLongPress: (details) => onLongPressMessage(doc, details),
-              onAddContact: onAddContact,
-            );
-          },
+        return _buildList(filteredMessages, uploadingMessages, currentUserId, onLongPressMessage);
+      },
+    );
+  }
+
+  // Helper method to build the list, keeping the builder clean
+  ListView _buildList(
+    List<DocumentSnapshot> messages, 
+    List<UploadingMessage> uploadingMessages, 
+    String currentUserId,
+    Function(DocumentSnapshot, LongPressStartDetails) onLongPressMessage,
+  ) {
+    return ListView.builder(
+      reverse: true,
+      itemCount: messages.length + uploadingMessages.length,
+      itemBuilder: (context, index) {
+        if (index < uploadingMessages.length) {
+          final uploadingItem = uploadingMessages[index];
+          return MessageBubble(
+            uploadingMessage: uploadingItem,
+            isSelected: false,
+            onLongPress: (_) {},
+            onAddContact: (String _, String __) {}, // Explicitly typed
+            chatId: chatId,
+          );
+        }
+        
+        final doc = messages[index - uploadingMessages.length];
+        final messageId = doc.id;
+        final isSelected = selectedMessages.contains(messageId);
+        
+        return MessageBubble(
+          doc: doc,
+          isSelected: isSelected,
+          onLongPress: (details) => onLongPressMessage(doc, details),
+          onAddContact: onAddContact,
+          chatId: chatId,
         );
       },
     );

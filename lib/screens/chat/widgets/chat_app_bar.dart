@@ -14,7 +14,6 @@ class ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
   final ValueChanged<bool> onToggleSearch;
   final TextEditingController searchController;
   final ValueChanged<String> onMenuSelected;
-  // --- NUEVO: Callbacks para iniciar llamadas ---
   final VoidCallback onStartVideoCall;
   final VoidCallback onStartVoiceCall;
 
@@ -66,96 +65,107 @@ class ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
             hintText: 'Buscar mensajes...',
             border: InputBorder.none,
           ),
-          style: TextStyle(color: theme.appBarTheme.foregroundColor),
+          style: TextStyle(color: theme.appBarTheme.foregroundColor, fontSize: 18),
         ),
       );
     }
 
     return AppBar(
+      // --- AJUSTE DE DISEÑO (VERSIÓN FINAL) ---
+      automaticallyImplyLeading: false,
       titleSpacing: 0,
-      title: StreamBuilder<DocumentSnapshot>(
-        stream: FirebaseFirestore.instance.collection('users').doc(otherUser.uid).snapshots(),
-        builder: (context, snapshot) {
-          if (!snapshot.hasData) return Text(nickname ?? otherUser.displayName ?? 'Usuario');
-          
-          final user = UserModel.fromFirestore(snapshot.data!);
-
-          return InkWell(
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => ContactProfileScreen(user: user, nickname: nickname)),
-              );
-            },
-            child: Row(
-              children: [
-                CircleAvatar(
-                  radius: 20,
-                  backgroundImage: user.photoUrl != null && user.photoUrl!.isNotEmpty
-                      ? CachedNetworkImageProvider(user.photoUrl!)
-                      : null,
-                  child: user.photoUrl == null || user.photoUrl!.isEmpty
-                      ? const Icon(Icons.person, size: 22)
-                      : null,
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        nickname ?? user.displayName ?? 'Usuario', 
-                        style: theme.textTheme.titleLarge?.copyWith(
-                          color: theme.appBarTheme.foregroundColor
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      StreamBuilder<DocumentSnapshot>(
-                        stream: FirestoreService().getChatStream(chatId),
-                        builder: (context, typingSnapshot) {
-                          String subtitleText = 'desconectado';
-                          Color subtitleColor = theme.appBarTheme.foregroundColor?.withOpacity(0.7) ?? Colors.white70;
-
-                          if (user.presence) {
-                             subtitleText = 'en línea';
-                             subtitleColor = Colors.greenAccent;
-                          } else if (user.lastSeen != null) {
-                            subtitleText = _formatLastSeen(user.lastSeen!);
-                            subtitleColor = theme.appBarTheme.foregroundColor?.withOpacity(0.7) ?? Colors.white70;
-                          }
-
-                          if (typingSnapshot.hasData && typingSnapshot.data!.exists) {
-                            final data = typingSnapshot.data!.data() as Map<String, dynamic>;
-                            final typingUids = List<String>.from(data['typing_status'] ?? []);
-                            if (typingUids.contains(otherUser.uid)) {
-                              subtitleText = 'Escribiendo...';
-                              subtitleColor = Colors.greenAccent;
-                            }
-                          }
-                          return Text(
-                            subtitleText, 
-                            style: theme.textTheme.bodyMedium?.copyWith(
-                              color: subtitleColor
-                            )
-                          );
-                        },
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
+      // Usamos el 'leading' para agrupar el botón de atrás y el avatar
+      leadingWidth: 70, // Ancho suficiente para ambos elementos
+      leading: Row(
+        children: [
+          const BackButton(),
+          // Movemos el CircleAvatar aquí para que esté junto al botón
+          CircleAvatar(
+            radius: 18,
+            backgroundImage: otherUser.photoUrl != null && otherUser.photoUrl!.isNotEmpty
+                ? CachedNetworkImageProvider(otherUser.photoUrl!)
+                : null,
+            child: otherUser.photoUrl == null || otherUser.photoUrl!.isEmpty
+                ? const Icon(Icons.person, size: 20)
+                : null,
+          ),
+        ],
+      ),
+      // El 'title' ahora es solo el texto y es clickeable
+      title: InkWell(
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+                builder: (context) => ContactProfileScreen(user: otherUser, nickname: nickname)),
           );
         },
+        child: StreamBuilder<DocumentSnapshot>(
+          stream: FirebaseFirestore.instance.collection('users').doc(otherUser.uid).snapshots(),
+          builder: (context, userSnapshot) {
+            final user = userSnapshot.hasData ? UserModel.fromFirestore(userSnapshot.data!) : otherUser;
+
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  nickname ?? user.displayName ?? 'Usuario',
+                  style: theme.textTheme.titleLarge?.copyWith(
+                    color: theme.appBarTheme.foregroundColor,
+                    fontSize: 18, 
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+                StreamBuilder<DocumentSnapshot>(
+                  stream: FirestoreService().getChatStream(chatId),
+                  builder: (context, chatSnapshot) {
+                    String subtitleText = ' ';
+                    Color subtitleColor = theme.appBarTheme.foregroundColor?.withOpacity(0.7) ?? Colors.white70;
+
+                    if (user.presence) {
+                       subtitleText = 'en línea';
+                       subtitleColor = Colors.lightGreenAccent;
+                    } else if (user.lastSeen != null) {
+                      subtitleText = _formatLastSeen(user.lastSeen!);
+                    }
+
+                    if (chatSnapshot.hasData && chatSnapshot.data!.exists) {
+                      final data = chatSnapshot.data!.data() as Map<String, dynamic>;
+                      final typingUids = List<String>.from(data['typing_status'] ?? []);
+                      if (typingUids.contains(otherUser.uid)) {
+                        subtitleText = 'escribiendo...';
+                        subtitleColor = Colors.lightGreenAccent;
+                      }
+                    }
+                    
+                    return Text(
+                      subtitleText,
+                      style: TextStyle(
+                        color: subtitleColor,
+                        fontSize: 13,
+                        fontWeight: FontWeight.normal,
+                      )
+                    );
+                  },
+                ),
+              ],
+            );
+          },
+        ),
       ),
       actions: [
-        // --- NUEVOS BOTONES DE LLAMADA ---
+        // --- AJUSTE DE DISEÑO (VERSIÓN FINAL) ---
+        // Se reduce el 'splashRadius' para un feedback visual más pequeño y se ajusta el padding
         IconButton(
+          splashRadius: 20,
+          padding: const EdgeInsets.symmetric(horizontal: 4),
           icon: const Icon(Icons.videocam),
           onPressed: onStartVideoCall,
         ),
         IconButton(
+          splashRadius: 20,
+          padding: const EdgeInsets.symmetric(horizontal: 4),
           icon: const Icon(Icons.call),
           onPressed: onStartVoiceCall,
         ),
@@ -177,4 +187,3 @@ class ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
   @override
   Size get preferredSize => const Size.fromHeight(kToolbarHeight);
 }
-

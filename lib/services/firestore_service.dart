@@ -13,24 +13,20 @@ class FirestoreService {
   Future<void> updateUserActiveChat(String? chatId) async {
     final user = auth.currentUser;
     if (user == null) return;
-
     await _db.collection('users').doc(user.uid).set({
       'current_chat_id': chatId,
     }, SetOptions(merge: true));
   }
   
-  // --- LÓGICA DE LLAMADAS (CORREGIDA Y UNIFICADA) ---
   Future<String?> startCall({
     required String recipientId,
     required bool isVideoCall,
   }) async {
     final currentUser = auth.currentUser;
     if (currentUser == null) return null;
-
     try {
       final userDoc = await _db.collection('users').doc(currentUser.uid).get();
       final currentUserName = (userDoc.data() as Map<String, dynamic>)['display_name'] ?? 'Alguien';
-
       final callDocRef = _db.collection('calls').doc();
       await callDocRef.set({
         'caller_id': currentUser.uid,
@@ -65,8 +61,6 @@ class FirestoreService {
     }
   }
   
-  // --- (El resto de tus métodos de Firestore permanecen aquí sin cambios) ---
-  
   String getChatId(String user1, String user2) {
     return user1.hashCode <= user2.hashCode ? '$user1-$user2' : '$user2-$user1';
   }
@@ -89,7 +83,7 @@ class FirestoreService {
     }, SetOptions(merge: true));
   }
   
-    Future<void> createUserProfile(User user) async {
+  Future<void> createUserProfile(User user) async {
     await _db.collection('users').doc(user.uid).set({
       'uid': user.uid,
       'email': user.email,
@@ -236,6 +230,7 @@ class FirestoreService {
         .orderBy('timestamp', descending: true);
   }
 
+   // --- MÉTODO sendMessage CON LÓGICA DE ESTADO AÑADIDA ---
   Future<void> sendMessage({
     required String chatId,
     required String senderId,
@@ -263,22 +258,28 @@ class FirestoreService {
       'document': document,
       'music': music,
       'timestamp': FieldValue.serverTimestamp(),
-      'is_read': false,
+      'status': 'sent', // <-- LÍNEA AÑADIDA
       'is_deleted': false,
       'reactions': {},
     };
     messageData.removeWhere((key, value) => value == null);
 
-    await _db.collection('chats').doc(chatId).collection('messages').add(messageData);
-
-    String lastMessageText = _getLastMessageText(messageData);
+    final messageRef = await _db.collection('chats').doc(chatId).collection('messages').add(messageData);
 
     await _db.collection('chats').doc(chatId).set({
       'participants': [senderId, recipientId],
-      'last_message_text': lastMessageText,
+      'last_message_text': _getLastMessageText(messageData),
       'last_message_timestamp': FieldValue.serverTimestamp(),
+      'last_message_sender_uid': senderId, // <-- LÍNEA AÑADIDA
+      'last_message_status': 'sent',     // <-- LÍNEA AÑADIDA
       'visible_for': [senderId, recipientId],
     }, SetOptions(merge: true));
+
+    // Simulación de entrega (en una app real, el otro dispositivo lo confirmaría)
+    Future.delayed(const Duration(seconds: 1), () {
+        messageRef.update({'status': 'delivered'});
+        _db.collection('chats').doc(chatId).set({'last_message_status': 'delivered'}, SetOptions(merge: true));
+    });
   }
 
   Future<void> toggleReaction(String chatId, String messageId, String reaction) async {
@@ -315,20 +316,31 @@ class FirestoreService {
     });
   }
 
+ // --- MÉTODO markMessagesAsRead ACTUALIZADO PARA USAR 'status' ---
   Future<void> markMessagesAsRead({required String chatId, required String currentUserId}) async {
-    final querySnapshot = await _db
-        .collection('chats')
-        .doc(chatId)
+    final chatDocRef = _db.collection('chats').doc(chatId);
+    final messagesQuery = chatDocRef
         .collection('messages')
         .where('recipient_uid', isEqualTo: currentUserId)
-        .where('is_read', isEqualTo: false)
-        .get();
+        .where('status', isNotEqualTo: 'read');
+
+    final querySnapshot = await messagesQuery.get();
     
     WriteBatch batch = _db.batch();
     for (var doc in querySnapshot.docs) {
-      batch.update(doc.reference, {'is_read': true});
+      batch.update(doc.reference, {'status': 'read'});
     }
     await batch.commit();
+
+    // Actualiza el estado del último mensaje solo si es necesario
+    final chatDoc = await chatDocRef.get();
+    if (chatDoc.exists) {
+        final data = chatDoc.data() as Map<String, dynamic>;
+        // Solo actualiza a 'read' si el último mensaje fue para mí y no estaba leído
+        if (data['last_message_sender_uid'] != currentUserId) {
+            await chatDocRef.set({'last_message_status': 'read'}, SetOptions(merge: true));
+        }
+    }
   }
 
   Future<void> clearChatForUser({required String chatId}) async {

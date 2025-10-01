@@ -1,12 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:provider/provider.dart';
 import 'package:simplechat/models/user_model.dart';
 import 'package:simplechat/screens/chat_list_page.dart';
 import 'package:simplechat/screens/login_page.dart';
 import 'package:simplechat/screens/profile_setup_page.dart';
-import 'package:simplechat/services/notification_service.dart';
 
 class AuthGate extends StatelessWidget {
   const AuthGate({super.key});
@@ -21,12 +19,9 @@ class AuthGate extends StatelessWidget {
           return const LoginPage();
         }
 
-        // Si hay un usuario, INICIAMOS el servicio de notificaciones.
-        // Esto es crucial para que el token se guarde después de iniciar sesión.
-        final notificationService = context.read<NotificationService>();
-        notificationService.init();
-
-        // Luego, comprobamos si el perfil del usuario está completo.
+        // Si hay un usuario, comprobamos si el perfil del usuario está completo.
+        // La inicialización de notificaciones ahora se maneja en main.dart
+        // para mayor estabilidad, por lo que la llamada a init() se elimina de aquí.
         return ProfileCheck(user: snapshot.data!);
       },
     );

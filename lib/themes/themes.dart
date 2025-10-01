@@ -11,7 +11,7 @@ final ThemeData lightTheme = ThemeData(
     secondary: const Color(0xFF00A884),
     onPrimary: Colors.white,
     onSecondary: Colors.white,
-    secondaryContainer: const Color(0xFFFFFFFF),
+    secondaryContainer: const Color(0xFFE6FFD9), // Burbuja de mensaje recibido
     onSecondaryContainer: Colors.black87,
     background: const Color(0xFFF0F2F5),
     surface: Colors.white,
@@ -36,17 +36,16 @@ final ThemeData lightTheme = ThemeData(
     elevation: 1.0,
     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
   ),
-  // --- CORRECCIÓN FINAL DIÁLOGO ---
   dialogTheme: DialogThemeData(
     backgroundColor: Colors.white,
-    surfaceTintColor: const Color.from(alpha: 0, red: 1, green: 1, blue: 1), // Anula la tinta semitransparente
+    surfaceTintColor: Colors.transparent,
     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
     titleTextStyle: const TextStyle(color: Colors.black87, fontSize: 20, fontWeight: FontWeight.bold),
     contentTextStyle: const TextStyle(color: Colors.black87, fontSize: 16),
   ),
   popupMenuTheme: PopupMenuThemeData(
     color: Colors.white,
-    textStyle: const TextStyle(color: Colors.black87, fontSize: 24),
+    textStyle: const TextStyle(color: Colors.black87),
     shape: RoundedRectangleBorder(
       borderRadius: BorderRadius.circular(12),
     ),
@@ -73,67 +72,152 @@ final ThemeData darkTheme = ThemeData(
   ),
   popupMenuTheme: PopupMenuThemeData(
     color: const Color(0xFF282828),
-    textStyle: const TextStyle(color: Colors.white, fontSize: 24),
     shape: RoundedRectangleBorder(
       borderRadius: BorderRadius.circular(12),
     ),
     elevation: 8,
   ),
-  // --- CORRECCIÓN FINAL DIÁLOGO ---
   dialogTheme: DialogThemeData(
     backgroundColor: const Color(0xFF282828),
-    surfaceTintColor: const Color.from(alpha: 0, red: 0.157, green: 0.157, blue: 0.157), // Anula la tinta semitransparente
+    surfaceTintColor: Colors.transparent,
     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
     titleTextStyle: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
     contentTextStyle: const TextStyle(color: Colors.white70, fontSize: 16),
   ),
 );
 
-// --- TEMA MEDIANOCHE (Azul Oscuro y Cian) ---
-final ThemeData midnightBlueTheme = ThemeData(
+// --- TEMA WHATSAPP NOCTURNO (NUEVO) ---
+final ThemeData whatsAppNocturnoTheme = ThemeData(
   brightness: Brightness.dark,
-  scaffoldBackgroundColor: const Color(0xFF0D1B2A),
+  primaryColor: const Color(0xFF00A884),
+  scaffoldBackgroundColor: const Color(0xFF111B21),
   colorScheme: ColorScheme.fromSeed(
-    seedColor: const Color(0xFF3A86FF),
-    primary: const Color(0xFF3A86FF),
-    secondary: const Color(0xFF00B4D8),
-    onPrimary: Colors.white,
-    secondaryContainer: const Color(0xFF1B263B),
-    onSecondaryContainer: const Color(0xFFE0E1DD),
-    surface: const Color(0xFF1B263B),
-    onSurface: const Color(0xFFE0E1DD),
-    surfaceVariant: const Color(0xFF415A77),
-    background: const Color(0xFF0D1B2A),
+    seedColor: const Color(0xFF00A884),
     brightness: Brightness.dark,
+    primary: const Color(0xFF00A884), // Verde principal para botones
+    onPrimary: Colors.black,
+    secondaryContainer: const Color(0xFF202C33), // Burbuja de mensaje recibido
+    onSecondaryContainer: Colors.white,
+    surface: const Color(0xFF202C33),
+    onSurface: Colors.white,
+    background: const Color(0xFF111B21),
   ),
   appBarTheme: const AppBarTheme(
-    backgroundColor: Color(0xFF1B263B),
+    backgroundColor: Color(0xFF202C33),
+    foregroundColor: Colors.white,
     elevation: 0,
   ),
+  floatingActionButtonTheme: const FloatingActionButtonThemeData(
+    backgroundColor: Color(0xFF00A884),
+    foregroundColor: Colors.black,
+  ),
   cardTheme: CardThemeData(
-    elevation: 1.0,
-    color: const Color(0xFF1B263B),
+    elevation: 0,
+    color: const Color(0xFF111B21), // Mismo color que el fondo para un look integrado
     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
   ),
-  popupMenuTheme: PopupMenuThemeData(
-    color: const Color(0xFF1B263B),
-    textStyle: const TextStyle(color: Color(0xFFE0E1DD), fontSize: 24),
-    shape: RoundedRectangleBorder(
-      borderRadius: BorderRadius.circular(12),
-    ),
-    elevation: 8,
-  ),
-  // --- CORRECCIÓN FINAL DIÁLOGO ---
   dialogTheme: DialogThemeData(
-    backgroundColor: const Color(0xFF1B263B),
-    surfaceTintColor: const Color.from(alpha: 0, red: 0.106, green: 0.149, blue: 0.231), // Anula la tinta semitransparente
+    backgroundColor: const Color(0xFF202C33),
+    surfaceTintColor: Colors.transparent,
     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-    titleTextStyle: const TextStyle(color: Color(0xFFE0E1DD), fontSize: 20, fontWeight: FontWeight.bold),
-    contentTextStyle: const TextStyle(color: Color(0xFFE0E1DD), fontSize: 16),
+  ),
+  popupMenuTheme: PopupMenuThemeData(
+    color: const Color(0xFF202C33),
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
   ),
 );
 
-// --- TEMA PIXEL ART ---
+// --- TEMA BRISA PASTEL (NUEVO) ---
+final ThemeData brisaPastelTheme = ThemeData(
+  brightness: Brightness.light,
+  primaryColor: const Color(0xFF81C784), // Verde pastel
+  scaffoldBackgroundColor: const Color(0xFFF1F8E9), // Fondo muy claro
+  colorScheme: ColorScheme.fromSeed(
+    seedColor: const Color(0xFF81C784),
+    brightness: Brightness.light,
+    primary: const Color(0xFF81C784),
+    onPrimary: Colors.white,
+    secondaryContainer: const Color(0xFFE1BEE7), // Burbuja lila pastel
+    onSecondaryContainer: const Color(0xFF4A148C),
+    surface: Colors.white,
+    onSurface: Colors.black87,
+  ),
+  appBarTheme: const AppBarTheme(
+    backgroundColor: Colors.white,
+    foregroundColor: Colors.black87,
+    elevation: 1,
+  ),
+  floatingActionButtonTheme: const FloatingActionButtonThemeData(
+    backgroundColor: Color(0xFF81C784),
+    foregroundColor: Colors.white,
+  ),
+  cardTheme: CardThemeData(
+    elevation: 1.0,
+    color: Colors.white,
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+  ),
+  dialogTheme: DialogThemeData(
+    backgroundColor: Colors.white,
+    surfaceTintColor: Colors.transparent,
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+  ),
+  popupMenuTheme: PopupMenuThemeData(
+    color: Colors.white,
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+  ),
+);
+
+
+// --- TEMA TERMINAL CLÁSICA (REFINADO) ---
+final ThemeData classicTerminalTheme = ThemeData(
+  brightness: Brightness.dark,
+  primaryColor: const Color(0xFF00FF41),
+  scaffoldBackgroundColor: const Color(0xFF0D0208),
+  fontFamily: 'RobotoMono', // Una fuente monoespaciada más legible
+  colorScheme: ColorScheme.fromSeed(
+    seedColor: const Color(0xFF00FF41),
+    primary: const Color(0xFF00FF41),
+    secondary: const Color(0xFF008F11),
+    onPrimary: Colors.black,
+    secondaryContainer: const Color(0xAA0D1F12),
+    onSecondaryContainer: const Color(0xFF00FF41),
+    background: const Color(0xFF0D0208),
+    surface: const Color(0xFF0D1F12),
+    onSurface: const Color(0xFF00FF41),
+    surfaceVariant: const Color(0xFF23242F),
+    brightness: Brightness.dark,
+  ),
+  textTheme: const TextTheme(
+    bodyLarge: TextStyle(color: Color(0xFF00FF41)),
+    bodyMedium: TextStyle(color: Color(0x9900FF41)),
+    titleLarge: TextStyle(color: Color(0xFF00FF41)),
+    headlineSmall: TextStyle(color: Color(0xFF00FF41)),
+  ),
+  appBarTheme: const AppBarTheme(
+    backgroundColor: Color(0xFF0D1F12),
+    foregroundColor: Color(0xFF00FF41),
+    elevation: 0,
+  ),
+  floatingActionButtonTheme: const FloatingActionButtonThemeData(
+    backgroundColor: Color(0xFF00FF41),
+    foregroundColor: Colors.black,
+  ),
+  dialogTheme: const DialogThemeData(
+    backgroundColor: Color(0xFF0D1F12),
+    surfaceTintColor: Colors.transparent,
+    titleTextStyle: TextStyle(fontFamily: 'RobotoMono', color: Color(0xFF00FF41)),
+    contentTextStyle: TextStyle(fontFamily: 'RobotoMono', color: Color(0xFF00FF41)),
+  ),
+  cardTheme: const CardThemeData(
+    color: Color(0xFF0D1F12),
+  ),
+  popupMenuTheme: const PopupMenuThemeData(
+    color: Color(0xFF0D1F12),
+  ),
+);
+
+// --- TEMA PIXEL ART (SE MANTIENE) ---
+// (Tu tema pixel art original se mantiene aquí sin cambios)
 final ThemeData pixelTheme = ThemeData(
   brightness: Brightness.dark,
   primarySwatch: Colors.blue,
@@ -160,6 +244,7 @@ final ThemeData pixelTheme = ThemeData(
     bodyLarge: TextStyle(fontSize: 8.0), // Texto principal
     bodyMedium: TextStyle(fontSize: 7.0), // Texto secundario
     labelLarge: TextStyle(fontSize: 8.0), // Botones
+    bodySmall: TextStyle(fontSize: 6.0), // Texto más pequeño
   ),
   appBarTheme: const AppBarTheme(
     backgroundColor: Color(0xFF191A21),
@@ -190,7 +275,7 @@ final ThemeData pixelTheme = ThemeData(
   ),
   dialogTheme: const DialogThemeData(
     backgroundColor: Color(0xFF191A21),
-    surfaceTintColor: Color(0xFF191A21),
+    surfaceTintColor: Colors.transparent,
     shape: BeveledRectangleBorder(),
     titleTextStyle: TextStyle(fontFamily: 'PressStart2P', fontSize: 10.0),
     contentTextStyle: TextStyle(fontFamily: 'PressStart2P', fontSize: 9.0),
@@ -201,71 +286,7 @@ final ThemeData pixelTheme = ThemeData(
   ),
   popupMenuTheme: const PopupMenuThemeData(
     color: Color(0xFF191A21),
-    textStyle: TextStyle(fontSize: 24),
     shape: BeveledRectangleBorder(),
     elevation: 0,
   ),
 );
-
-// --- TEMA TERMINAL CLÁSICA ---
-final ThemeData classicTerminalTheme = ThemeData(
-  brightness: Brightness.dark,
-  primaryColor: const Color(0xFF00FF41),
-  scaffoldBackgroundColor: const Color(0xFF0D0208),
-  fontFamily: 'PressStart2P',
-  colorScheme: ColorScheme.fromSeed(
-    seedColor: const Color(0xFF00FF41),
-    primary: const Color(0xFF00FF41),
-    secondary: const Color(0xFF008F11),
-    onPrimary: Colors.black,
-    secondaryContainer: const Color(0xFF0D1F12),
-    onSecondaryContainer: const Color(0xFF00FF41),
-    background: const Color(0xFF0D0208),
-    surface: const Color(0xFF0D1F12),
-    onSurface: const Color(0xFF00FF41),
-    surfaceVariant: const Color(0xFF23242F),
-    brightness: Brightness.dark,
-  ),
-  // --- TAMAÑOS DE FUENTE AJUSTADOS ---
-  textTheme: const TextTheme(
-    displayLarge: TextStyle(fontSize: 14.0, color: Color(0xFF00FF41)),
-    displayMedium: TextStyle(fontSize: 12.0, color: Color(0xFF00FF41)),
-    displaySmall: TextStyle(fontSize: 11.0, color: Color(0xFF00FF41)),
-    headlineMedium: TextStyle(fontSize: 10.0, color: Color(0xFF00FF41)),
-    headlineSmall: TextStyle(fontSize: 9.0, color: Color(0xFF00FF41)),
-    titleLarge: TextStyle(fontSize: 10.0, color: Color(0xFF00FF41)),
-    titleMedium: TextStyle(fontSize: 9.0, color: Color(0xFF00FF41)),
-    titleSmall: TextStyle(fontSize: 8.0, color: Color(0xFF00FF41)),
-    bodyLarge: TextStyle(fontSize: 8.0, color: Color(0xFF00FF41)),
-    bodyMedium: TextStyle(fontSize: 7.0, color: Color(0x9900FF41)),
-    labelLarge: TextStyle(fontSize: 8.0, color: Color(0xFF00FF41)),
-  ),
-  appBarTheme: const AppBarTheme(
-    backgroundColor: Color(0xFF0D1F12),
-    foregroundColor: Color(0xFF00FF41),
-    elevation: 0,
-  ),
-  floatingActionButtonTheme: const FloatingActionButtonThemeData(
-    backgroundColor: Color(0xFF00FF41),
-    foregroundColor: Colors.black,
-    shape: BeveledRectangleBorder(),
-  ),
-  dialogTheme: const DialogThemeData(
-    backgroundColor: Color(0xFF0D1F12),
-    surfaceTintColor: Color(0xFF0D1F12),
-    shape: BeveledRectangleBorder(),
-    titleTextStyle: TextStyle(fontFamily: 'PressStart2P', fontSize: 10.0, color: Color(0xFF00FF41)),
-    contentTextStyle: TextStyle(fontFamily: 'PressStart2P', fontSize: 9.0, color: Color(0xFF00FF41)),
-  ),
-  cardTheme: const CardThemeData(
-    color: Color(0xFF0D1F12),
-    shape: BeveledRectangleBorder(),
-  ),
-  popupMenuTheme: const PopupMenuThemeData(
-    color: Color(0xFF0D1F12),
-    textStyle: TextStyle(fontSize: 24),
-    shape: BeveledRectangleBorder(),
-    elevation: 0,
-  ),
-);
-

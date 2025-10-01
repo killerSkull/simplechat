@@ -2,33 +2,41 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../themes/themes.dart';
 
-// --- MODIFICADO: Se añade el nuevo tema al enum ---
-enum AppTheme { light, dark, pixel, midnightBlue }
+enum AppTheme { 
+  light, 
+  dark, 
+  pixel, 
+  midnightBlue, 
+  classicTerminal, 
+  whatsAppNocturno, 
+  brisaPastel 
+}
 
 class ThemeProvider with ChangeNotifier {
-  ThemeData _themeData = pixelTheme;
+  ThemeData _themeData = pixelTheme; // Tema por defecto
   AppTheme _currentTheme = AppTheme.pixel;
+  bool _isLoading = true;
 
   ThemeData get themeData => _themeData;
   AppTheme get currentTheme => _currentTheme;
+  bool get isLoading => _isLoading;
 
-  // --- NUEVO: Mapa para mostrar nombres amigables en la UI ---
   final Map<AppTheme, String> themeNames = {
     AppTheme.light: 'Claro',
     AppTheme.dark: 'Oscuro',
     AppTheme.pixel: 'Píxel',
     AppTheme.midnightBlue: 'Medianoche',
+    AppTheme.classicTerminal: 'Terminal',
+    AppTheme.whatsAppNocturno: 'Nocturno',
+    AppTheme.brisaPastel: 'Pastel',
   };
 
-  ThemeProvider() {
-    _loadPreferences();
-  }
-
-  void _loadPreferences() async {
+  Future<void> loadPreferences() async {
     final prefs = await SharedPreferences.getInstance();
     final themeIndex = prefs.getInt('theme') ?? AppTheme.pixel.index;
     _currentTheme = AppTheme.values[themeIndex];
     _themeData = _getThemeData(_currentTheme);
+    _isLoading = false;
     notifyListeners();
   }
 
@@ -48,9 +56,16 @@ class ThemeProvider with ChangeNotifier {
         return darkTheme;
       case AppTheme.pixel:
         return pixelTheme;
-      // --- MODIFICADO: Se añade el caso para el nuevo tema ---
       case AppTheme.midnightBlue:
-        return midnightBlueTheme;
+        // Este tema no estaba definido, lo asignamos a uno existente
+        // o puedes crearlo en themes.dart
+        return darkTheme; 
+      case AppTheme.classicTerminal:
+        return classicTerminalTheme;
+      case AppTheme.whatsAppNocturno:
+        return whatsAppNocturnoTheme;
+      case AppTheme.brisaPastel:
+        return brisaPastelTheme;
     }
   }
 }

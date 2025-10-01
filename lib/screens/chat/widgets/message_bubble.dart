@@ -29,24 +29,15 @@ _EmojiAnalysis _analyzeTextForEmojis(String? text) {
   if (text == null || text.trim().isEmpty) {
     return _EmojiAnalysis(false, 0);
   }
-
-  // This complex regex helps to identify and remove most emoji characters,
-  // including unicode ranges for symbols, pictographs, transport icons,
-  // and the variation selector(U+FE0F) that makes characters like ❤️ render as emojis.
   final textWithoutEmojis = text.replaceAll(
       RegExp(
         r'(\u00a9|\u00ae|[\u2000-\u3300]|\ud83c[\ud000-\udfff]|\ud83d[\ud000-\udfff]|\ud83e[\ud000-\udfff]|\ufe0f)',
       ),
       '');
-
-  // If the string is empty after removing emojis and trimming whitespace,
-  // it means it only contained emojis.
   if (textWithoutEmojis.trim().isEmpty) {
-    // We use the 'characters' package to correctly count the number of visible emojis (grapheme clusters).
     final characterCount = text.trim().characters.length;
     return _EmojiAnalysis(true, characterCount);
   }
-
   return _EmojiAnalysis(false, 0);
 }
 
@@ -57,6 +48,7 @@ class MessageBubble extends StatelessWidget {
   final Function(LongPressStartDetails) onLongPress;
   final String? contactPhotoUrl;
   final Function(String, String) onAddContact;
+  final String chatId;
 
   const MessageBubble({
     super.key,
@@ -66,7 +58,8 @@ class MessageBubble extends StatelessWidget {
     required this.onLongPress,
     this.contactPhotoUrl,
     required this.onAddContact,
-  }) : assert(doc != null || uploadingMessage != null);
+    required this.chatId,
+  });
 
   Future<void> _onOpenLink(LinkableElement link) async {
     final uri = Uri.parse(link.url);
@@ -77,6 +70,28 @@ class MessageBubble extends StatelessWidget {
 
   String _formatTimestamp(DateTime timestamp) {
     return DateFormat('HH:mm').format(timestamp);
+  }
+
+  Widget _buildStatusIcon(String status, Color color) {
+    IconData icon;
+    switch (status) {
+      case 'sending':
+        icon = Icons.watch_later_outlined;
+        break;
+      case 'sent':
+        icon = Icons.done;
+        break;
+      case 'delivered':
+        icon = Icons.done_all;
+        break;
+      case 'read':
+        icon = Icons.done_all;
+        color = Colors.lightBlueAccent;
+        break;
+      default:
+        icon = Icons.done;
+    }
+    return Icon(icon, size: 14, color: color);
   }
 
   @override
@@ -90,6 +105,7 @@ class MessageBubble extends StatelessWidget {
 
     final bool isMe = message['sender_uid'] == currentUser.uid;
     final bool isDeleted = message['is_deleted'] as bool? ?? false;
+    final String status = message['status'] as String? ?? 'sent';
 
     final text = message['text'] as String?;
     final _EmojiAnalysis emojiAnalysis = _analyzeTextForEmojis(text);
@@ -116,7 +132,6 @@ class MessageBubble extends StatelessWidget {
     final thumbnailUrl = message['thumbnail_url'] as String?;
     final audioUrl = message['audio_url'] as String?;
     final audioDuration = message['audio_duration'] as int?;
-    final isRead = message['is_read'] as bool? ?? false;
 
     final contactData = message['contact'] as Map<String, dynamic>?;
     final documentData = message['document'] as Map<String, dynamic>?;
@@ -232,13 +247,7 @@ class MessageBubble extends StatelessWidget {
                                 ),
                               if (isMe) ...[
                                 const SizedBox(width: 4),
-                                Icon(
-                                  isRead ? Icons.done_all : Icons.done,
-                                  size: 14,
-                                  color: isRead
-                                      ? Colors.lightBlueAccent
-                                      : textColor.withOpacity(0.7),
-                                )
+                                _buildStatusIcon(status, textColor.withOpacity(0.7)),
                               ]
                             ],
                           )
@@ -304,10 +313,11 @@ class MessageBubble extends StatelessWidget {
                   ],
                 ),
               ),
-            CircularProgressIndicator(
-              value: message.progress,
-              backgroundColor: Colors.white.withOpacity(0.5),
-              valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
+            // --- BUG 3 FIX: Replaced CircularProgressIndicator with a subtler icon ---
+            Icon(
+              Icons.watch_later_outlined,
+              color: Colors.white.withOpacity(0.8),
+              size: 32,
             ),
           ],
         ),
@@ -586,6 +596,8 @@ class AudioPlayerWidget extends StatelessWidget {
                       waveColor: waveColor,
                       progressColor: progressColor,
                       progress: progress,
+                      // --- BUG 1 FIX: Pass the audioUrl to ensure a consistent seed ---
+                      seed: audioUrl.hashCode,
                     ),
                   ),
                 ),
@@ -614,22 +626,28 @@ class WaveformPainter extends CustomPainter {
   final Color waveColor;
   final Color progressColor;
   final double progress;
+  // --- BUG 1 FIX: The waveform data is now final and passed in ---
   final List<double> _waveformData;
 
-  WaveformPainter(
-      {required this.waveColor,
-      required this.progressColor,
-      required this.progress})
-      : _waveformData = _generateWaveformData();
+  WaveformPainter({
+    required this.waveColor,
+    required this.progressColor,
+    required this.progress,
+    required int seed,
+  }) : _waveformData = _generateWaveformData(seed);
 
-  static List<double> _generateWaveformData() {
+  // --- BUG 1 FIX: The generation logic is now a static method ---
+  static List<double> _generateWaveformData(int seed) {
+    // Use the seed to create a predictable random sequence
+    final random = Random(seed);
     return List<double>.generate(50, (index) {
       final value = (index % 15 == 0)
           ? 0.2
           : (index % 5 == 0)
               ? 0.4
               : 0.6;
-      return value + (Random().nextDouble() * 0.4);
+      // Use the seeded random generator
+      return value + (random.nextDouble() * 0.4);
     }).toList();
   }
 
@@ -661,6 +679,7 @@ class WaveformPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant WaveformPainter oldDelegate) {
+    // Only repaint if the progress changes. The waveform itself never changes.
     return progress != oldDelegate.progress;
   }
 }

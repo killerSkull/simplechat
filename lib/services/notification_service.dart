@@ -23,7 +23,7 @@ class NotificationService {
 
   /// --- PASO 1: INICIALIZACIÓN BÁSICA ---
   /// Esto se puede ejecutar de forma segura antes de que la UI se construya.
-  Future<void> init() async {
+  Future<void> init({required GlobalKey<NavigatorState> navigatorKey}) async {
     await _firebaseMessaging.requestPermission();
 
     final fcmToken = await _firebaseMessaging.getToken();
