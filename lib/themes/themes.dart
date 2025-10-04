@@ -11,7 +11,7 @@ final ThemeData lightTheme = ThemeData(
     secondary: const Color(0xFF00A884),
     onPrimary: Colors.white,
     onSecondary: Colors.white,
-    secondaryContainer: const Color(0xFFE6FFD9), // Burbuja de mensaje recibido
+    secondaryContainer: const Color(0xFFFFFFFF),
     onSecondaryContainer: Colors.black87,
     background: const Color(0xFFF0F2F5),
     surface: Colors.white,
@@ -57,50 +57,55 @@ final ThemeData lightTheme = ThemeData(
 final ThemeData darkTheme = ThemeData(
   brightness: Brightness.dark,
   colorScheme: ColorScheme.fromSeed(
-      seedColor: Colors.deepPurple,
-      brightness: Brightness.dark,
-      surfaceContainer: const Color(0xFF282828)),
-  scaffoldBackgroundColor: const Color(0xFF121212),
+    seedColor: const Color(0xFF7B96EB),
+    brightness: Brightness.dark,
+    primary: const Color(0xFF82B1FF),
+    onPrimary: const Color(0xFF00227B),
+    secondaryContainer: const Color(0xFF333846),
+    onSecondaryContainer: const Color(0xFFE0E2EC),
+    background: const Color(0xFF1B1B1F),
+    surface: const Color(0xFF24262E),
+    onSurface: const Color(0xFFE3E2E6),
+  ),
+  scaffoldBackgroundColor: const Color(0xFF1B1B1F),
   appBarTheme: const AppBarTheme(
-    backgroundColor: Color(0xFF1F1F1F),
+    backgroundColor: Color(0xFF24262E),
     elevation: 0,
   ),
   cardTheme: CardThemeData(
     elevation: 1.0,
-    color: const Color(0xFF1F1F1F),
+    color: const Color(0xFF24262E),
     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
   ),
   popupMenuTheme: PopupMenuThemeData(
-    color: const Color(0xFF282828),
+    color: const Color(0xFF2F313A),
     shape: RoundedRectangleBorder(
       borderRadius: BorderRadius.circular(12),
     ),
     elevation: 8,
   ),
   dialogTheme: DialogThemeData(
-    backgroundColor: const Color(0xFF282828),
+    backgroundColor: const Color(0xFF24262E),
     surfaceTintColor: Colors.transparent,
     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-    titleTextStyle: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
-    contentTextStyle: const TextStyle(color: Colors.white70, fontSize: 16),
+    titleTextStyle: const TextStyle(color: Color(0xFFE3E2E6), fontSize: 20, fontWeight: FontWeight.bold),
+    contentTextStyle: const TextStyle(color: Color(0xFFE3E2E6), fontSize: 16),
   ),
 );
 
-// --- TEMA WHATSAPP NOCTURNO (NUEVO) ---
-final ThemeData whatsAppNocturnoTheme = ThemeData(
+// --- TEMA WHATSAPP NOCTURNO ---
+final ThemeData whatsappNocturnoTheme = ThemeData(
   brightness: Brightness.dark,
   primaryColor: const Color(0xFF00A884),
   scaffoldBackgroundColor: const Color(0xFF111B21),
-  colorScheme: ColorScheme.fromSeed(
-    seedColor: const Color(0xFF00A884),
-    brightness: Brightness.dark,
-    primary: const Color(0xFF00A884), // Verde principal para botones
-    onPrimary: Colors.black,
-    secondaryContainer: const Color(0xFF202C33), // Burbuja de mensaje recibido
+  colorScheme: const ColorScheme.dark(
+    primary: Color(0xFF005C4B),
+    onPrimary: Colors.white,
+    secondaryContainer: Color(0xFF202C33),
     onSecondaryContainer: Colors.white,
-    surface: const Color(0xFF202C33),
+    background: Color(0xFF111B21),
+    surface: Color(0xFF202C33),
     onSurface: Colors.white,
-    background: const Color(0xFF111B21),
   ),
   appBarTheme: const AppBarTheme(
     backgroundColor: Color(0xFF202C33),
@@ -109,11 +114,11 @@ final ThemeData whatsAppNocturnoTheme = ThemeData(
   ),
   floatingActionButtonTheme: const FloatingActionButtonThemeData(
     backgroundColor: Color(0xFF00A884),
-    foregroundColor: Colors.black,
+    foregroundColor: Colors.white,
   ),
   cardTheme: CardThemeData(
     elevation: 0,
-    color: const Color(0xFF111B21), // Mismo color que el fondo para un look integrado
+    color: const Color(0xFF202C33),
     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
   ),
   dialogTheme: DialogThemeData(
@@ -123,96 +128,144 @@ final ThemeData whatsAppNocturnoTheme = ThemeData(
   ),
   popupMenuTheme: PopupMenuThemeData(
     color: const Color(0xFF202C33),
-    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(12),
+    ),
   ),
 );
 
-// --- TEMA BRISA PASTEL (NUEVO) ---
+// --- TEMA BRISA PASTEL ---
 final ThemeData brisaPastelTheme = ThemeData(
   brightness: Brightness.light,
-  primaryColor: const Color(0xFF81C784), // Verde pastel
-  scaffoldBackgroundColor: const Color(0xFFF1F8E9), // Fondo muy claro
+  scaffoldBackgroundColor: const Color(0xFFFDF6F0),
   colorScheme: ColorScheme.fromSeed(
-    seedColor: const Color(0xFF81C784),
+    seedColor: const Color(0xFF8E9AAF),
     brightness: Brightness.light,
-    primary: const Color(0xFF81C784),
-    onPrimary: Colors.white,
-    secondaryContainer: const Color(0xFFE1BEE7), // Burbuja lila pastel
-    onSecondaryContainer: const Color(0xFF4A148C),
-    surface: Colors.white,
-    onSurface: Colors.black87,
+    primary: const Color(0xFFB4C2D4),
+    onPrimary: const Color(0xFF333740),
+    secondaryContainer: const Color(0xFFEAE5E0),
+    onSecondaryContainer: const Color(0xFF59524C),
+    surface: const Color(0xFFF8F0E9),
+    onSurface: const Color(0xFF45403B),
   ),
   appBarTheme: const AppBarTheme(
-    backgroundColor: Colors.white,
-    foregroundColor: Colors.black87,
-    elevation: 1,
-  ),
-  floatingActionButtonTheme: const FloatingActionButtonThemeData(
-    backgroundColor: Color(0xFF81C784),
-    foregroundColor: Colors.white,
+    backgroundColor: Color(0xFFF8F0E9),
+    foregroundColor: Color(0xFF45403B),
+    elevation: 0,
   ),
   cardTheme: CardThemeData(
-    elevation: 1.0,
-    color: Colors.white,
-    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+    elevation: 0,
+    color: const Color(0xFFF8F0E9),
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+    surfaceTintColor: Colors.transparent,
   ),
   dialogTheme: DialogThemeData(
-    backgroundColor: Colors.white,
+    backgroundColor: const Color(0xFFFDF6F0),
     surfaceTintColor: Colors.transparent,
     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
   ),
-  popupMenuTheme: PopupMenuThemeData(
-    color: Colors.white,
-    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-  ),
 );
 
-
-// --- TEMA TERMINAL CLÁSICA (REFINADO) ---
+// --- TEMA TERMINAL CLÁSICA ---
 final ThemeData classicTerminalTheme = ThemeData(
   brightness: Brightness.dark,
   primaryColor: const Color(0xFF00FF41),
   scaffoldBackgroundColor: const Color(0xFF0D0208),
-  fontFamily: 'RobotoMono', // Una fuente monoespaciada más legible
+  fontFamily: 'CourierPrime',
   colorScheme: ColorScheme.fromSeed(
     seedColor: const Color(0xFF00FF41),
+    brightness: Brightness.dark,
     primary: const Color(0xFF00FF41),
-    secondary: const Color(0xFF008F11),
     onPrimary: Colors.black,
-    secondaryContainer: const Color(0xAA0D1F12),
+    secondaryContainer: const Color(0xFF1A1A1A),
     onSecondaryContainer: const Color(0xFF00FF41),
     background: const Color(0xFF0D0208),
-    surface: const Color(0xFF0D1F12),
+    surface: const Color(0xFF1A1A1A),
     onSurface: const Color(0xFF00FF41),
-    surfaceVariant: const Color(0xFF23242F),
-    brightness: Brightness.dark,
   ),
   textTheme: const TextTheme(
     bodyLarge: TextStyle(color: Color(0xFF00FF41)),
-    bodyMedium: TextStyle(color: Color(0x9900FF41)),
+    bodyMedium: TextStyle(color: Color(0xFF00FF41)),
     titleLarge: TextStyle(color: Color(0xFF00FF41)),
-    headlineSmall: TextStyle(color: Color(0xFF00FF41)),
   ),
   appBarTheme: const AppBarTheme(
-    backgroundColor: Color(0xFF0D1F12),
+    backgroundColor: Color(0xFF1A1A1A),
     foregroundColor: Color(0xFF00FF41),
     elevation: 0,
   ),
-  floatingActionButtonTheme: const FloatingActionButtonThemeData(
-    backgroundColor: Color(0xFF00FF41),
-    foregroundColor: Colors.black,
-  ),
   dialogTheme: const DialogThemeData(
-    backgroundColor: Color(0xFF0D1F12),
-    surfaceTintColor: Colors.transparent,
-    titleTextStyle: TextStyle(fontFamily: 'RobotoMono', color: Color(0xFF00FF41)),
-    contentTextStyle: TextStyle(fontFamily: 'RobotoMono', color: Color(0xFF00FF41)),
+    backgroundColor: Color(0xFF1A1A1A),
+    shape: RoundedRectangleBorder(side: BorderSide(color: Color(0xFF00FF41))),
   ),
   cardTheme: const CardThemeData(
-    color: Color(0xFF0D1F12),
+    color: Color(0xFF1A1A1A),
+    shape: RoundedRectangleBorder(side: BorderSide(color: Color(0xFF00FF41), width: 0.5)),
   ),
-  popupMenuTheme: const PopupMenuThemeData(
-    color: Color(0xFF0D1F12),
+);
+
+// --- TEMA 1: TELEGRAM OSCURO (REFINADO) ---
+final ThemeData telegramDarkTheme = ThemeData(
+  brightness: Brightness.dark,
+  scaffoldBackgroundColor: const Color(0xFF212121), // Gris oscuro de fondo
+  primaryColor: const Color(0xFFeb5757), // Acento rojo/naranja
+  colorScheme: const ColorScheme.dark(
+    primary: Color(0xFFeb5757), // Color para acentos interactivos (controles de audio)
+    onPrimary: Colors.white,
+    secondaryContainer: Color(0xFF333333), // Burbujas de chat
+    onSecondaryContainer: Colors.white,
+    background: Color(0xFF212121),
+    surface: Color(0xFF303030), // AppBars, tarjetas
+    onSurface: Colors.white,
+    primaryContainer: Color(0xFFeb5757), // Badges de notificación
+  ),
+  appBarTheme: const AppBarTheme(
+    backgroundColor: Color(0xFF303030),
+    elevation: 0,
+  ),
+  floatingActionButtonTheme: const FloatingActionButtonThemeData(
+    backgroundColor: Color(0xFFeb5757), // Botón de acción
+    foregroundColor: Colors.white,
+  ),
+  cardTheme: CardThemeData(
+    color: const Color(0xFF303030),
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+  ),
+  dialogTheme: DialogThemeData(
+    backgroundColor: const Color(0xFF303030),
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+  ),
+);
+
+// --- TEMA 2: ATARDECER VERDE ---
+final ThemeData greenSunsetTheme = ThemeData(
+  brightness: Brightness.dark,
+  scaffoldBackgroundColor: const Color(0xFF0e1613),
+  primaryColor: const Color(0xFF25d366),
+  colorScheme: const ColorScheme.dark(
+    primary: Color(0xFF2a3942), // Burbujas de chat
+    onPrimary: Colors.white,
+    secondary: Color(0xFF25d366), // Acento principal
+    secondaryContainer: Color(0xFF2a3942),
+    onSecondaryContainer: Colors.white,
+    background: Color(0xFF0e1613),
+    surface: Color(0xFF1f2c34), // AppBar, tarjetas
+    onSurface: Colors.white,
+  ),
+  appBarTheme: const AppBarTheme(
+    backgroundColor: Color(0xFF1f2c34),
+    elevation: 0,
+  ),
+  floatingActionButtonTheme: const FloatingActionButtonThemeData(
+    backgroundColor: Color(0xFF25d366),
+    foregroundColor: Colors.white,
+  ),
+  cardTheme: CardThemeData(
+    color: const Color(0xFF1f2c34),
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+  ),
+  dialogTheme: DialogThemeData(
+    backgroundColor: const Color(0xFF1f2c34),
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
   ),
 );
 
@@ -233,18 +286,18 @@ final ThemeData pixelTheme = ThemeData(
   ),
   // --- TAMAÑOS DE FUENTE AJUSTADOS ---
   textTheme: const TextTheme(
-    displayLarge: TextStyle(fontSize: 14.0),
-    displayMedium: TextStyle(fontSize: 12.0),
-    displaySmall: TextStyle(fontSize: 11.0),
-    headlineMedium: TextStyle(fontSize: 10.0),
-    headlineSmall: TextStyle(fontSize: 9.0),
+    displayLarge: TextStyle(fontSize: 10.0),
+    displayMedium: TextStyle(fontSize: 9.0),
+    displaySmall: TextStyle(fontSize: 8.0),
+    headlineMedium: TextStyle(fontSize: 8.0),
+    headlineSmall: TextStyle(fontSize: 7.0),
     titleLarge: TextStyle(fontSize: 10.0), // Usado en AppBars
     titleMedium: TextStyle(fontSize: 9.0),
     titleSmall: TextStyle(fontSize: 8.0),
     bodyLarge: TextStyle(fontSize: 8.0), // Texto principal
     bodyMedium: TextStyle(fontSize: 7.0), // Texto secundario
-    labelLarge: TextStyle(fontSize: 8.0), // Botones
-    bodySmall: TextStyle(fontSize: 6.0), // Texto más pequeño
+    labelLarge: TextStyle(fontSize: 6.0), // Botones
+    bodySmall: TextStyle(fontSize: 4.0), // Texto más pequeño
   ),
   appBarTheme: const AppBarTheme(
     backgroundColor: Color(0xFF191A21),

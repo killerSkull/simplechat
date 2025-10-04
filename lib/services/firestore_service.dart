@@ -8,6 +8,56 @@ class FirestoreService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
   final FirebaseAuth auth = FirebaseAuth.instance;
 
+  // --- FUNCIÓN NUEVA: Para crear o recuperar el chat de "Mensajes Guardados" ---
+  Future<String> getOrCreateSavedMessagesChat() async {
+    final user = auth.currentUser;
+    if (user == null) throw Exception("Usuario no autenticado");
+    
+    final chatId = 'saved_${user.uid}';
+    final chatRef = _db.collection('chats').doc(chatId);
+    final chatDoc = await chatRef.get();
+
+    if (!chatDoc.exists) {
+      await chatRef.set({
+        'participants': [user.uid],
+        'is_saved_messages': true, // Flag para identificar este chat especial
+        'last_message_text': 'Tus mensajes guardados aparecerán aquí.',
+        'last_message_timestamp': FieldValue.serverTimestamp(),
+        'last_message_sender_uid': user.uid,
+        'pinned_for': [user.uid], // Anclado por defecto
+        'visible_for': [user.uid],
+        'created_at': FieldValue.serverTimestamp(),
+      });
+    }
+    
+    return chatId;
+  }
+
+  // --- BUG 2 FIX: Nuevo método para actualizar mensajes ---
+   // --- FUNCIÓN QUE FALTABA ---
+  Future<void> updateMessage({
+    required String chatId,
+    required String messageId,
+    required String newText,
+  }) async {
+    // Actualiza el mensaje específico
+    await _db.collection('chats').doc(chatId).collection('messages').doc(messageId).update({
+      'text': newText,
+      'is_edited': true,
+    });
+
+    // Revisa si el mensaje editado era el último del chat para actualizar la vista previa
+    final chatDoc = await _db.collection('chats').doc(chatId).get();
+    if (chatDoc.exists) {
+      final lastMessageSnapshot = await _db.collection('chats').doc(chatId).collection('messages').orderBy('timestamp', descending: true).limit(1).get();
+      if (lastMessageSnapshot.docs.isNotEmpty && lastMessageSnapshot.docs.first.id == messageId) {
+        await _db.collection('chats').doc(chatId).update({
+          'last_message_text': newText,
+        });
+      }
+    }
+  }
+
   // --- MÉTODO QUE FALTABA (RESTAURADO) ---
   /// Actualiza el campo 'current_chat_id' del usuario para saber si está en un chat.
   Future<void> updateUserActiveChat(String? chatId) async {
@@ -59,6 +109,36 @@ class FirestoreService {
     } catch (e) {
       print("Error al finalizar la llamada (puede que ya no exista): $e");
     }
+  }
+
+  // Edit Message
+  Future<void> editMessage({
+    required String chatId,
+    required String messageId,
+    required String newText,
+  }) async {
+    await _db.collection('chats').doc(chatId).collection('messages').doc(messageId).update({
+      'text': newText,
+      'is_edited': true,
+      'edited_at': FieldValue.serverTimestamp(),
+    });
+  }
+
+  // PinChat
+  Future<void> pinChat(String chatId) async {
+    final user = auth.currentUser;
+    if (user == null) return;
+    await _db.collection('chats').doc(chatId).set({
+      'pinned_for': FieldValue.arrayUnion([user.uid])
+    }, SetOptions(merge: true));
+  }
+  /// Desfija un chat para el usuario actual.
+  Future<void> unpinChat(String chatId) async {
+    final user = auth.currentUser;
+    if (user == null) return;
+    await _db.collection('chats').doc(chatId).set({
+      'pinned_for': FieldValue.arrayRemove([user.uid])
+    }, SetOptions(merge: true));
   }
   
   String getChatId(String user1, String user2) {
@@ -258,6 +338,7 @@ class FirestoreService {
       'document': document,
       'music': music,
       'timestamp': FieldValue.serverTimestamp(),
+      'is_edited': false, // Nuevo campo
       'status': 'sent', // <-- LÍNEA AÑADIDA
       'is_deleted': false,
       'reactions': {},
@@ -265,6 +346,9 @@ class FirestoreService {
     messageData.removeWhere((key, value) => value == null);
 
     final messageRef = await _db.collection('chats').doc(chatId).collection('messages').add(messageData);
+    final unreadCounterField = 'unread_count_for_$recipientId';
+    _db.collection('chats').doc(chatId).collection('messages').doc(messageRef.id).update({'status': 'delivered'});
+
 
     await _db.collection('chats').doc(chatId).set({
       'participants': [senderId, recipientId],
@@ -273,7 +357,12 @@ class FirestoreService {
       'last_message_sender_uid': senderId, // <-- LÍNEA AÑADIDA
       'last_message_status': 'sent',     // <-- LÍNEA AÑADIDA
       'visible_for': [senderId, recipientId],
+      unreadCounterField: FieldValue.increment(1),
     }, SetOptions(merge: true));
+    
+    
+
+    
 
     // Simulación de entrega (en una app real, el otro dispositivo lo confirmaría)
     Future.delayed(const Duration(seconds: 1), () {
@@ -281,6 +370,9 @@ class FirestoreService {
         _db.collection('chats').doc(chatId).set({'last_message_status': 'delivered'}, SetOptions(merge: true));
     });
   }
+
+  
+  
 
   Future<void> toggleReaction(String chatId, String messageId, String reaction) async {
     final user = auth.currentUser;
@@ -318,19 +410,34 @@ class FirestoreService {
 
  // --- MÉTODO markMessagesAsRead ACTUALIZADO PARA USAR 'status' ---
   Future<void> markMessagesAsRead({required String chatId, required String currentUserId}) async {
+    final unreadCounterField = 'unread_count_for_$currentUserId';
     final chatDocRef = _db.collection('chats').doc(chatId);
     final messagesQuery = chatDocRef
         .collection('messages')
         .where('recipient_uid', isEqualTo: currentUserId)
         .where('status', isNotEqualTo: 'read');
 
+
     final querySnapshot = await messagesQuery.get();
     
+    // Se resetea el contador de no leídos para el usuario actual.
+    await _db.collection('chats').doc(chatId).set({
+      unreadCounterField: 0,
+    }, SetOptions(merge: true));
+    // Se actualiza el estado de los mensajes a 'read'.
+    final messagesToUpdate = await _db
+        .collection('chats')
+        .doc(chatId)
+        .collection('messages')
+        .where('recipient_uid', isEqualTo: currentUserId)
+        .where('status', isNotEqualTo: 'read')
+        .get();
     WriteBatch batch = _db.batch();
-    for (var doc in querySnapshot.docs) {
+    for (var doc in messagesToUpdate.docs) {
       batch.update(doc.reference, {'status': 'read'});
     }
     await batch.commit();
+  
 
     // Actualiza el estado del último mensaje solo si es necesario
     final chatDoc = await chatDocRef.get();
@@ -397,7 +504,7 @@ class FirestoreService {
      final user = auth.currentUser;
     if (user == null) return;
 
-    final deletedMessageText = '🚫 Mensaje eliminado';
+    final deletedMessageText = ' Mensaje eliminado';
 
     await _db
         .collection('chats')

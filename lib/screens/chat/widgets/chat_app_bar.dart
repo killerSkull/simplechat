@@ -16,6 +16,8 @@ class ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
   final ValueChanged<String> onMenuSelected;
   final VoidCallback onStartVideoCall;
   final VoidCallback onStartVoiceCall;
+  // --- NUEVO: Flag para adaptar la UI ---
+  final bool isSavedMessagesChat;
 
   const ChatAppBar({
     super.key,
@@ -28,6 +30,7 @@ class ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
     required this.onMenuSelected,
     required this.onStartVideoCall,
     required this.onStartVoiceCall,
+    this.isSavedMessagesChat = false,
   });
 
   String _formatLastSeen(DateTime lastSeen) {
@@ -69,29 +72,47 @@ class ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
         ),
       );
     }
-
-    return AppBar(
-      // --- AJUSTE DE DISEÑO (VERSIÓN FINAL) ---
-      automaticallyImplyLeading: false,
-      titleSpacing: 0,
-      // Usamos el 'leading' para agrupar el botón de atrás y el avatar
-      leadingWidth: 70, // Ancho suficiente para ambos elementos
-      leading: Row(
-        children: [
-          const BackButton(),
-          // Movemos el CircleAvatar aquí para que esté junto al botón
-          CircleAvatar(
-            radius: 18,
-            backgroundImage: otherUser.photoUrl != null && otherUser.photoUrl!.isNotEmpty
-                ? CachedNetworkImageProvider(otherUser.photoUrl!)
-                : null,
-            child: otherUser.photoUrl == null || otherUser.photoUrl!.isEmpty
-                ? const Icon(Icons.person, size: 20)
-                : null,
+    
+    // --- LÓGICA: Si es el chat de "Mensajes Guardados", muestra una AppBar simple ---
+    if (isSavedMessagesChat) {
+      return AppBar(
+        title: const Text('Mensajes Guardados'),
+        actions: [
+          PopupMenuButton<String>(
+            onSelected: onMenuSelected,
+            itemBuilder: (BuildContext context) {
+              // Menú simplificado para este chat
+              return {'Buscar en el chat', 'Vaciar chat'}.map((String choice) {
+                return PopupMenuItem<String>(
+                  value: choice,
+                  child: Text(choice),
+                );
+              }).toList();
+            },
           ),
         ],
-      ),
-      // El 'title' ahora es solo el texto y es clickeable
+      );
+    }
+
+    // --- Si no, muestra la AppBar normal para un chat con otro usuario ---
+    return AppBar(
+      automaticallyImplyLeading: false,
+      titleSpacing: 0,
+      leadingWidth: 85,
+      leading: Row(
+          children: [
+            IconButton(onPressed: (){Navigator.pop(context);}, icon: const Icon(Icons.arrow_back)),
+            CircleAvatar(
+                radius: 15,
+                backgroundImage: otherUser.photoUrl != null && otherUser.photoUrl!.isNotEmpty
+                    ? CachedNetworkImageProvider(otherUser.photoUrl!)
+                    : null,
+                child: otherUser.photoUrl == null || otherUser.photoUrl!.isEmpty
+                    ? const Icon(Icons.person, size: 10)
+                    : null,
+              ),
+          ],
+        ),
       title: InkWell(
         onTap: () {
           Navigator.push(
@@ -125,7 +146,7 @@ class ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
 
                     if (user.presence) {
                        subtitleText = 'en línea';
-                       subtitleColor = Colors.lightGreenAccent;
+                       subtitleColor = Colors.green;
                     } else if (user.lastSeen != null) {
                       subtitleText = _formatLastSeen(user.lastSeen!);
                     }
@@ -135,7 +156,7 @@ class ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
                       final typingUids = List<String>.from(data['typing_status'] ?? []);
                       if (typingUids.contains(otherUser.uid)) {
                         subtitleText = 'escribiendo...';
-                        subtitleColor = Colors.lightGreenAccent;
+                        subtitleColor = Colors.green;
                       }
                     }
                     
@@ -143,7 +164,7 @@ class ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
                       subtitleText,
                       style: TextStyle(
                         color: subtitleColor,
-                        fontSize: 13,
+                        fontSize: 10,
                         fontWeight: FontWeight.normal,
                       )
                     );
@@ -155,17 +176,15 @@ class ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
         ),
       ),
       actions: [
-        // --- AJUSTE DE DISEÑO (VERSIÓN FINAL) ---
-        // Se reduce el 'splashRadius' para un feedback visual más pequeño y se ajusta el padding
         IconButton(
-          splashRadius: 20,
-          padding: const EdgeInsets.symmetric(horizontal: 4),
+          splashRadius: 18,
+          padding: const EdgeInsets.symmetric(horizontal: 2),
           icon: const Icon(Icons.videocam),
           onPressed: onStartVideoCall,
         ),
         IconButton(
-          splashRadius: 20,
-          padding: const EdgeInsets.symmetric(horizontal: 4),
+          splashRadius: 18,
+          padding: const EdgeInsets.symmetric(horizontal: 2),
           icon: const Icon(Icons.call),
           onPressed: onStartVoiceCall,
         ),

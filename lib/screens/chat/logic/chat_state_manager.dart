@@ -23,11 +23,18 @@ class ChatStateManager with ChangeNotifier {
 
   bool _isSelectionMode = false;
   final List<DocumentSnapshot> _selectedMessages = [];
+  
+  bool _isEditing = false;
+  DocumentSnapshot? _editingMessage;
+
   final List<UploadingMessage> _uploadingMessages = [];
 
   bool get isSelectionMode => _isSelectionMode;
   List<DocumentSnapshot> get selectedMessages => _selectedMessages;
   List<UploadingMessage> get uploadingMessages => _uploadingMessages;
+
+  bool get isEditing => _isEditing;
+  DocumentSnapshot? get editingMessage => _editingMessage;
 
   ChatStateManager({
     required this.context,
@@ -37,6 +44,59 @@ class ChatStateManager with ChangeNotifier {
     required this.currentUserId,
     required this.otherUserId,
   });
+
+  // --- MEJORA 2: Lógica centralizada para saber si un mensaje se puede editar ---
+  bool get canEditSelectedMessage {
+    if (_selectedMessages.length != 1) return false;
+    final message = _selectedMessages.first;
+    final data = message.data() as Map<String, dynamic>;
+    if (data['sender_uid'] != currentUserId) return false;
+
+    // Solo se pueden editar mensajes de texto
+    if (data['text'] == null || (data['text'] as String).isEmpty) return false;
+    
+    // Un mensaje eliminado no se puede editar
+    if (data['is_deleted'] == true) return false;
+
+    final timestamp = data['timestamp'] as Timestamp?;
+    if (timestamp == null) return false;
+
+    // Se permite editar solo si el mensaje tiene menos de 24 horas
+    return DateTime.now().difference(timestamp.toDate()).inHours < 24;
+  }
+  
+  void startEditing(TextEditingController messageController) {
+    if (!canEditSelectedMessage) return;
+    _editingMessage = _selectedMessages.first;
+    final messageData = _editingMessage!.data() as Map<String, dynamic>;
+    
+    messageController.text = messageData['text'] ?? '';
+    
+    _isEditing = true;
+    exitSelectionMode();
+    notifyListeners();
+  }
+
+  void cancelEditing(TextEditingController messageController) {
+    messageController.clear();
+    _isEditing = false;
+    _editingMessage = null;
+    notifyListeners();
+  }
+
+  Future<void> confirmEditing(TextEditingController messageController) async {
+    if (!_isEditing || _editingMessage == null) return;
+    
+    final newText = messageController.text.trim();
+    if (newText.isNotEmpty) {
+      await firestoreService.updateMessage(
+        chatId: chatId,
+        messageId: _editingMessage!.id,
+        newText: newText,
+      );
+    }
+    cancelEditing(messageController);
+  }
 
   void handleFileUpload(UploadTask uploadTask, UploadingMessage message, {int? audioDuration}) {
     _uploadingMessages.insert(0, message);
@@ -225,6 +285,7 @@ class ChatStateManager with ChangeNotifier {
   }
 
   void onMessageLongPress(DocumentSnapshot messageDoc, LongPressStartDetails details) {
+    if (isEditing) return;
     final messageId = messageDoc.id;
     final alreadySelected = _selectedMessages.any((doc) => doc.id == messageId);
 
@@ -245,19 +306,24 @@ class ChatStateManager with ChangeNotifier {
     notifyListeners();
   }
 
+  void exitSelectionMode() {
+    if (_isSelectionMode) {
+      _isSelectionMode = false;
+      _selectedMessages.clear();
+      notifyListeners();
+    }
+  }
+
   void _showReactionOverlay(DocumentSnapshot messageDoc, Offset tapPosition) async {
     final selectedReaction = await showDialog<String>(
       context: context,
-      barrierColor: Colors.black.withOpacity(0.1), // Un fondo sutil
+      barrierColor: Colors.black.withOpacity(0.1), 
       builder: (BuildContext context) {
-        // Calcula el tamaño y la posición del overlay
         final screenWidth = MediaQuery.of(context).size.width;
-        final dialogWidth = screenWidth * 0.8; // El diálogo ocupa el 80% del ancho
-        final dialogHeight = 52.0; // Altura fija
+        final dialogWidth = screenWidth * 0.8; 
+        final dialogHeight = 52.0;
 
-        // Centra el diálogo horizontalmente en la posición del toque, pero evita que se salga de la pantalla
         final left = (tapPosition.dx - (dialogWidth / 2)).clamp(8.0, screenWidth - dialogWidth - 8.0);
-        // Posiciona el diálogo encima del mensaje
         final top = (tapPosition.dy - dialogHeight - 12).clamp(8.0, MediaQuery.of(context).size.height - dialogHeight - 8.0);
 
         return Stack(
@@ -279,17 +345,6 @@ class ChatStateManager with ChangeNotifier {
     if (selectedReaction != null) {
       await firestoreService.toggleReaction(chatId, messageDoc.id, selectedReaction);
       exitSelectionMode();
-    } else {
-      // Per the original logic, do nothing if no reaction is selected,
-      // leaving the user in selection mode.
-    }
-  }
-
-  void exitSelectionMode() {
-    if (_isSelectionMode) {
-      _isSelectionMode = false;
-      _selectedMessages.clear();
-      notifyListeners();
     }
   }
 
@@ -324,18 +379,15 @@ class ChatStateManager with ChangeNotifier {
   }
 }
 
-// --- WIDGET DE DIÁLOGO DE REACCIONES MEJORADO ---
-// Más pequeño, deslizable y con un estilo similar a WhatsApp.
 class _ReactionsDialog extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    // Lista de emojis ampliada para que el deslizamiento sea útil
     final reactions = ['👍', '❤️', '😂', '😯', '😢', '🙏', '🔥', '🎉', '💯', '👏', '😮', '😍'];
     final theme = Theme.of(context);
 
     return Card(
       color: theme.dialogTheme.backgroundColor,
-      shape: theme.dialogTheme.shape ?? const StadiumBorder(), // Bordes redondeados como una píldora
+      shape: theme.dialogTheme.shape ?? const StadiumBorder(),
       elevation: theme.dialogTheme.elevation ?? 8,
       margin: EdgeInsets.zero,
       clipBehavior: Clip.antiAlias,

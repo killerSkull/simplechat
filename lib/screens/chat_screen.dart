@@ -40,7 +40,6 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   Query? _messagesQuery;
   bool _isEmojiPickerVisible = false;
   Timer? _typingTimer;
-  // --- BUG 3 FIX: Initialize as null to represent the "loading" state ---
   bool? _isContact;
   bool _isSearching = false;
   final _searchController = TextEditingController();
@@ -51,6 +50,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   final ValueNotifier<Duration> _recordingDurationNotifier = ValueNotifier(Duration.zero);
   bool get _isRecording => _recorder.isRecording;
 
+  // --- NUEVO: Flag para saber si es el chat de Mensajes Guardados ---
+  bool _isSavedMessagesChat = false;
+
   StreamSubscription? _recorderSubscription;
   Timestamp? _currentClearedAtTimestamp;
 
@@ -60,6 +62,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     _firestoreService = context.read<FirestoreService>();
     _storageService = context.read<StorageService>();
     final currentUser = _firestoreService.auth.currentUser!;
+
+    // --- LÓGICA: Se determina si es el chat especial ---
+    _isSavedMessagesChat = widget.otherUser.uid == currentUser.uid;
     
     _messagesQuery = _firestoreService.getMessagesQuery(widget.chatId);
 
@@ -76,7 +81,11 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     _firestoreService.updateUserActiveChat(widget.chatId);
     _listenForChatUpdates(widget.chatId, currentUser.uid);
+    if (!_isSavedMessagesChat) {
     _checkIfContact();
+    } else {
+      _isContact = true;
+    }
     _firestoreService.markMessagesAsRead(chatId: widget.chatId, currentUserId: currentUser.uid);
     _searchController.addListener(() => setState(() {}));
 
@@ -339,9 +348,14 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
               selectedMessages: _chatManager.selectedMessages,
               onExitSelection: _chatManager.exitSelectionMode,
               onCopy: _chatManager.copySelectedMessage,
-              onDelete: _chatManager.showDeleteMessageDialog,
+              onDelete: _chatManager.showDeleteMessageDialog, 
+              // --- MEJORA 2: Se pasan los datos correctos a la AppBar ---
+              onEdit: () => _chatManager.startEditing(_messageController),
+              canEdit: _chatManager.canEditSelectedMessage,
             )
           : ChatAppBar(
+            // --- LÓGICA: Pasamos el flag a la AppBar ---
+              isSavedMessagesChat: _isSavedMessagesChat,
               onStartVideoCall: () => _startCall(true),
               onStartVoiceCall: () => _startCall(false),
               otherUser: widget.otherUser,
@@ -364,7 +378,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                 uploadingMessages: _chatManager.uploadingMessages,
                 isSearching: _isSearching,
                 searchQuery: _searchController.text,
-                onLongPressMessage: _chatManager.onMessageLongPress,
+                onLongPressMessage: (doc, details) => _chatManager.onMessageLongPress(doc, details),
                 selectedMessages:
                     _chatManager.selectedMessages.map((doc) => doc.id).toList(),
                 onAddContact: (uid, name) {
@@ -378,61 +392,61 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                 chatId: widget.chatId,
               ),
             ),
-            if (!_isSearching && !_chatManager.isSelectionMode)
-              // --- BUG 3 FIX: Conditional rendering based on the nullable _isContact state ---
-              if (_isContact == null)
-                // While loading, show a placeholder container with a fixed height
-                // to prevent the layout from jumping.
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 6.0),
-                  height: 60, // Approximate height of the input bar
-                  alignment: Alignment.center,
-                  child: const SizedBox.shrink(), // Or a very subtle indicator if you prefer
-                )
-              else 
-                // Once loaded, build the actual MessageInputBar
-                MessageInputBar(
-                  messageController: _messageController,
-                  isContact: _isContact!,
-                  isEmojiPickerVisible: _isEmojiPickerVisible,
-                  onSendMessage: () {
-                    final text = _messageController.text.trim();
-                    if (text.isNotEmpty) {
-                      _chatManager.sendMessage(text: text);
-                      _messageController.clear();
-                      _typingTimer?.cancel();
-                      _firestoreService.updateTypingStatus(
-                          chatId: widget.chatId,
-                          currentUserId: _chatManager.currentUserId,
-                          isTyping: false);
-                    }
-                  },
-                  onSendMedia: () => showAttachmentMenu(
-                    context,
-                    onPickFromCamera: _chatManager.pickFromCamera,
-                    onPickFromGallery: _chatManager.pickFromGallery,
-                    onPickMusic: () => _chatManager.pickFile('music'),
-                    onPickContact: () =>
-                        _chatManager.showContactPicker(widget.otherUser.uid),
-                    onPickDocument: () => _chatManager.pickFile('document'),
-                  ),
-                  onTextChanged: _onTextChanged,
-                  toggleEmojiPicker: () => setState(() {
-                    _isEmojiPickerVisible = !_isEmojiPickerVisible;
-                    if (_isEmojiPickerVisible) FocusScope.of(context).unfocus();
-                  }),
-                  onOpenCamera: _chatManager.pickFromCamera,
-                  isRecording: _isRecording,
-                  isRecorderInitialized: _isRecorderInitialized,
-                  recordingDurationNotifier: _recordingDurationNotifier,
-                  onStartRecording: _startRecording,
-                  onStopRecording: _stopRecording,
-                  onAddContact: () async {
-                    await _firestoreService.addContact(
-                        widget.otherUser.uid, widget.otherUser.displayName ?? '');
-                    _checkIfContact();
-                  },
+            // --- MEJORA 1: La barra de escritura ya no está condicionada ---
+            // Siempre se mostrará, incluso en modo selección o búsqueda.
+            if (_isContact == null)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 6.0),
+                height: 60,
+                alignment: Alignment.center,
+                child: const SizedBox.shrink(),
+              )
+            else 
+              MessageInputBar(
+                messageController: _messageController,
+                isContact: _isContact!,
+                isEmojiPickerVisible: _isEmojiPickerVisible,
+                isEditing: _chatManager.isEditing,
+                onCancelEdit: () => _chatManager.cancelEditing(_messageController),
+                onConfirmEdit: () => _chatManager.confirmEditing(_messageController), 
+                onSendMessage: () {
+                  final text = _messageController.text.trim();
+                  if (text.isNotEmpty) {
+                    _chatManager.sendMessage(text: text);
+                    _messageController.clear();
+                    _typingTimer?.cancel();
+                    _firestoreService.updateTypingStatus(
+                        chatId: widget.chatId,
+                        currentUserId: _chatManager.currentUserId,
+                        isTyping: false);
+                  }
+                },
+                onSendMedia: () => showAttachmentMenu(
+                  context,
+                  onPickFromCamera: _chatManager.pickFromCamera,
+                  onPickFromGallery: _chatManager.pickFromGallery,
+                  onPickMusic: () => _chatManager.pickFile('music'),
+                  onPickContact: () =>
+                      _chatManager.showContactPicker(widget.otherUser.uid),
+                  onPickDocument: () => _chatManager.pickFile('document'),
                 ),
+                onTextChanged: _onTextChanged,
+                toggleEmojiPicker: () => setState(() {
+                  _isEmojiPickerVisible = !_isEmojiPickerVisible;
+                  if (_isEmojiPickerVisible) FocusScope.of(context).unfocus();
+                }),
+                onOpenCamera: _chatManager.pickFromCamera,
+                isRecording: _isRecording,
+                isRecorderInitialized: _isRecorderInitialized,
+                recordingDurationNotifier: _recordingDurationNotifier,
+                onStartRecording: _startRecording,
+                onStopRecording: _stopRecording,
+                onAddContact: () async {
+                  await _firestoreService.addContact(
+                      widget.otherUser.uid, widget.otherUser.displayName ?? '');
+                  _checkIfContact();
+                },
+              ),
           ],
         ),
       ),

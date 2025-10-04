@@ -138,6 +138,7 @@ class MessageBubble extends StatelessWidget {
     final musicData = message['music'] as Map<String, dynamic>?;
 
     final reactions = Map<String, dynamic>.from(message['reactions'] ?? {});
+    final bool isEdited = message['is_edited'] as bool? ?? false;
 
     return GestureDetector(
       onLongPressStart: isDeleted ? null : onLongPress,
@@ -238,6 +239,15 @@ class MessageBubble extends StatelessWidget {
                           Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
+                              if (isEdited)
+                                Text(
+                                  'Editado ',
+                                  style: TextStyle(
+                                    color: textColor.withOpacity(0.7),
+                                    fontSize: 10,
+                                    fontStyle: FontStyle.italic,
+                                  ),
+                                ),
                               if (timestamp != null)
                                 Text(
                                   _formatTimestamp(timestamp),
@@ -248,7 +258,9 @@ class MessageBubble extends StatelessWidget {
                               if (isMe) ...[
                                 const SizedBox(width: 4),
                                 _buildStatusIcon(status, textColor.withOpacity(0.7)),
+                                
                               ]
+                              
                             ],
                           )
                         ],

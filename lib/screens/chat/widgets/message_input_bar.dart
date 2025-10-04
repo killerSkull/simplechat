@@ -17,6 +17,9 @@ class MessageInputBar extends StatefulWidget {
   final ValueChanged<String> onTextChanged;
   final VoidCallback toggleEmojiPicker;
   final VoidCallback onOpenCamera;
+  final bool isEditing;
+  final VoidCallback onCancelEdit;
+  final VoidCallback onConfirmEdit;
 
   const MessageInputBar({
     super.key,
@@ -34,6 +37,9 @@ class MessageInputBar extends StatefulWidget {
     required this.onTextChanged,
     required this.toggleEmojiPicker,
     required this.onOpenCamera,
+    required this.isEditing,
+    required this.onCancelEdit,
+    required this.onConfirmEdit,
   });
 
   @override
@@ -42,39 +48,42 @@ class MessageInputBar extends StatefulWidget {
 
 class _MessageInputBarState extends State<MessageInputBar> {
   bool _showSendButton = false;
+   final FocusNode _focusNode = FocusNode();
 
   @override
   void initState() {
     super.initState();
     widget.messageController.addListener(_updateButtonState);
-    _updateButtonState();
+    if (widget.isEditing) {
+      _focusNode.requestFocus();
+    }
   }
 
   @override
   void didUpdateWidget(covariant MessageInputBar oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.messageController != oldWidget.messageController) {
-      oldWidget.messageController.removeListener(_updateButtonState);
-      widget.messageController.addListener(_updateButtonState);
+    if (widget.isEditing && !oldWidget.isEditing) {
+      _focusNode.requestFocus();
     }
   }
 
   @override
   void dispose() {
     widget.messageController.removeListener(_updateButtonState);
+    _focusNode.dispose();
     super.dispose();
   }
+  
   
   void _updateButtonState() {
     if (mounted) {
       final hasText = widget.messageController.text.isNotEmpty;
       if (hasText != _showSendButton) {
-        setState(() {
-          _showSendButton = hasText;
-        });
+        setState(() => _showSendButton = hasText);
       }
     }
   }
+
 
   String _formatDuration(Duration d) {
     String twoDigits(int n) => n.toString().padLeft(2, '0');
@@ -87,6 +96,28 @@ class _MessageInputBarState extends State<MessageInputBar> {
   Widget build(BuildContext context) {
     final hasText = _showSendButton;
     final theme = Theme.of(context);
+    final isRecording = widget.recordingDurationNotifier.value > Duration.zero;
+
+    if (!widget.isContact && !widget.isEditing) {
+      return Container(
+        color: theme.colorScheme.surfaceVariant,
+        padding: const EdgeInsets.all(12.0),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            ElevatedButton.icon(
+              icon: const Icon(Icons.person_add),
+              label: const Text('Añadir a contactos para chatear'),
+              onPressed: widget.onAddContact,
+              style: ElevatedButton.styleFrom(
+                foregroundColor: theme.colorScheme.onPrimary,
+                backgroundColor: theme.colorScheme.primary,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
 
     if (!widget.isContact) {
        return Container(
@@ -127,7 +158,13 @@ class _MessageInputBarState extends State<MessageInputBar> {
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
-                        IconButton(
+                        widget.isEditing 
+                    ? IconButton(
+                        icon: const Icon(Icons.close),
+                        onPressed: widget.onCancelEdit,
+                        color: theme.iconTheme.color?.withOpacity(0.7),
+                      )
+                        : IconButton(
                           icon: Icon(widget.isEmojiPickerVisible ? Icons.keyboard : Icons.emoji_emotions_outlined),
                           onPressed: widget.toggleEmojiPicker,
                           color: theme.iconTheme.color?.withOpacity(0.7),
@@ -169,12 +206,13 @@ class _MessageInputBarState extends State<MessageInputBar> {
                             ),
                           ),
                         ),
+                        if (!widget.isEditing)
                         IconButton(
                           icon: const Icon(Icons.attach_file),
                           onPressed: widget.onSendMedia,
                           color: theme.iconTheme.color?.withOpacity(0.7),
                         ),
-                        if (!hasText && !widget.isRecording)
+                        if (!hasText && !widget.isEditing)
                           IconButton(
                             icon: const Icon(Icons.camera_alt),
                             onPressed: widget.onOpenCamera,
@@ -193,7 +231,13 @@ class _MessageInputBarState extends State<MessageInputBar> {
                     transitionBuilder: (child, animation) {
                       return ScaleTransition(scale: animation, child: child);
                     },
-                    child: hasText
+                    child: (widget.isEditing && hasText)
+                      ? IconButton(
+                        key: const ValueKey('confirm_icon'),
+                        icon: const Icon(Icons.check, color: Colors.white),
+                        onPressed: widget.onConfirmEdit,
+                        )
+                    : hasText
                       ? IconButton(
                           key: const ValueKey('send_icon'),
                           icon: const Icon(Icons.send, color: Colors.white),
@@ -220,7 +264,7 @@ class _MessageInputBarState extends State<MessageInputBar> {
               textEditingController: widget.messageController,
               onBackspacePressed: () {
                 widget.messageController
-                  ..text = widget.messageController.text.characters.skipLast(1).toString()
+                  ..text = widget.messageController.text.characters.skipLast(0).toString()
                   ..selection = TextSelection.fromPosition(
                       TextPosition(offset: widget.messageController.text.length));
               },

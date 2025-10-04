@@ -2,41 +2,48 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../themes/themes.dart';
 
+// --- NUEVOS TEMAS AÑADIDOS AL ENUM ---
 enum AppTheme { 
   light, 
   dark, 
   pixel, 
-  midnightBlue, 
-  classicTerminal, 
-  whatsAppNocturno, 
-  brisaPastel 
+  whatsappNocturno, // Nombre actualizado para claridad
+  brisaPastel,
+  classicTerminal,
+  telegramDark,
+  greenSunset,
 }
 
 class ThemeProvider with ChangeNotifier {
-  ThemeData _themeData = pixelTheme; // Tema por defecto
-  AppTheme _currentTheme = AppTheme.pixel;
-  bool _isLoading = true;
+  // Por defecto, iniciamos con el tema claro
+  ThemeData _themeData = lightTheme;
+  AppTheme _currentTheme = AppTheme.light;
 
   ThemeData get themeData => _themeData;
   AppTheme get currentTheme => _currentTheme;
-  bool get isLoading => _isLoading;
 
+  // --- NOMBRES ACTUALIZADOS PARA LA UI ---
   final Map<AppTheme, String> themeNames = {
-    AppTheme.light: 'Claro',
-    AppTheme.dark: 'Oscuro',
+    AppTheme.light: 'Claro (WhatsApp)',
+    AppTheme.dark: 'Oscuro (Material)',
     AppTheme.pixel: 'Píxel',
-    AppTheme.midnightBlue: 'Medianoche',
-    AppTheme.classicTerminal: 'Terminal',
-    AppTheme.whatsAppNocturno: 'Nocturno',
-    AppTheme.brisaPastel: 'Pastel',
+    AppTheme.whatsappNocturno: 'WhatsApp Nocturno',
+    AppTheme.brisaPastel: 'Brisa Pastel',
+    AppTheme.classicTerminal: 'Terminal Clásica',
+    AppTheme.telegramDark: 'Telegram Oscuro',
+    AppTheme.greenSunset: 'Atardecer Verde',
   };
+
+  ThemeProvider() {
+    loadPreferences();
+  }
 
   Future<void> loadPreferences() async {
     final prefs = await SharedPreferences.getInstance();
-    final themeIndex = prefs.getInt('theme') ?? AppTheme.pixel.index;
+    // Se establece el tema claro como valor por defecto si no hay nada guardado
+    final themeIndex = prefs.getInt('theme') ?? AppTheme.light.index;
     _currentTheme = AppTheme.values[themeIndex];
     _themeData = _getThemeData(_currentTheme);
-    _isLoading = false;
     notifyListeners();
   }
 
@@ -56,16 +63,19 @@ class ThemeProvider with ChangeNotifier {
         return darkTheme;
       case AppTheme.pixel:
         return pixelTheme;
-      case AppTheme.midnightBlue:
-        // Este tema no estaba definido, lo asignamos a uno existente
-        // o puedes crearlo en themes.dart
-        return darkTheme; 
-      case AppTheme.classicTerminal:
-        return classicTerminalTheme;
-      case AppTheme.whatsAppNocturno:
-        return whatsAppNocturnoTheme;
+      case AppTheme.whatsappNocturno:
+        return whatsappNocturnoTheme;
       case AppTheme.brisaPastel:
         return brisaPastelTheme;
+      case AppTheme.classicTerminal:
+        return classicTerminalTheme;
+      // --- NUEVOS TEMAS INTEGARADOS ---
+      case AppTheme.telegramDark:
+        return telegramDarkTheme;
+      case AppTheme.greenSunset:
+        return greenSunsetTheme;
+      default:
+        return lightTheme; // Fallback seguro
     }
   }
 }
